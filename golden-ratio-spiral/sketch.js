@@ -1,7 +1,7 @@
 let a = 1;
 let direction = 1; // 1 for forward, -1 for reverse
 let lastUpdateTime = 0;
-let updateInterval = 20; // 0.02 seconds = 20 milliseconds
+let updateInterval = 6.67; // 3 times faster: 20/3 ≈ 6.67 milliseconds
 let lastPoint = null;
 let secondLastPoint = null;
 let rainbowColors = [];
@@ -47,10 +47,14 @@ function draw() {
     let colorIndex = floor(colorCounter / 10) % rainbowColors.length;
     let currentColor = rainbowColors[colorIndex];
 
+    // Calculate thickness based on a value (5 levels: 1-100, 101-200, 201-300, 301-400, 401-500)
+    let thicknessLevel = floor((a - 1) / 100); // 0, 1, 2, 3, 4
+    let thickness = thicknessLevel + 1; // 1, 2, 3, 4, 5
+
     // Draw smooth curve from previous point to current point using bezier
     if (lastPoint !== null && secondLastPoint !== null) {
       stroke(currentColor);
-      strokeWeight(3);
+      strokeWeight(thickness);
       noFill();
 
       // Calculate control points for smooth curve
@@ -63,7 +67,7 @@ function draw() {
     } else if (lastPoint !== null) {
       // For the first segment, just draw a line
       stroke(currentColor);
-      strokeWeight(3);
+      strokeWeight(thickness);
       line(lastPoint.x, lastPoint.y, x, y);
     }
 
