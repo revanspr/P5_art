@@ -11,17 +11,15 @@ function setup() {
   createCanvas(800, 600);
   background(255);
 
-  // Define pastel rainbow colors: red, orange, yellow, green, cyan, blue, violet, magenta, pink
+  // Define base rainbow colors (will be adjusted by brightness)
   rainbowColors = [
-    color(255, 180, 180),   // Pastel Red
-    color(255, 210, 160),   // Pastel Orange
-    color(255, 255, 180),   // Pastel Yellow
-    color(180, 255, 180),   // Pastel Green
-    color(180, 240, 255),   // Pastel Cyan
-    color(180, 180, 255),   // Pastel Blue
-    color(210, 180, 255),   // Pastel Violet
-    color(255, 180, 255),   // Pastel Magenta
-    color(255, 180, 210)    // Pastel Pink
+    [255, 180, 180],   // Pastel Red
+    [255, 210, 160],   // Pastel Orange
+    [255, 255, 180],   // Pastel Yellow
+    [180, 255, 180],   // Pastel Green
+    [180, 240, 255],   // Pastel Cyan
+    [180, 180, 255],   // Pastel Blue
+    [210, 180, 255]    // Pastel Violet
   ];
 }
 
@@ -31,8 +29,6 @@ function draw() {
   // Update every 0.02 seconds (20 milliseconds)
   if (currentTime - lastUpdateTime >= updateInterval) {
     lastUpdateTime = currentTime;
-
-    let b = a / 2;
 
     // Calculate position using golden ratio spiral formula
     // Using polar coordinates: angle increases with a, radius with golden ratio
@@ -45,7 +41,18 @@ function draw() {
 
     // Determine color: loop through rainbow colors every 10 calculations using colorCounter
     let colorIndex = floor(colorCounter / 10) % rainbowColors.length;
-    let currentColor = rainbowColors[colorIndex];
+    let baseColor = rainbowColors[colorIndex];
+
+    // Calculate brightness multiplier based on a value (5 levels)
+    // When going forward (1-500), gets darker; when going backward (500-1), gets lighter
+    let brightnessLevel = floor((a - 1) / 100); // 0, 1, 2, 3, 4
+    let brightnessMultiplier = 1.0 - (brightnessLevel * 0.15); // 1.0, 0.85, 0.7, 0.55, 0.4
+
+    // Apply brightness to color
+    let r = baseColor[0] * brightnessMultiplier;
+    let g = baseColor[1] * brightnessMultiplier;
+    let bl = baseColor[2] * brightnessMultiplier;
+    let currentColor = color(r, g, bl);
 
     // Calculate thickness based on a value (5 levels: 1-100, 101-200, 201-300, 301-400, 401-500)
     let thicknessLevel = floor((a - 1) / 100); // 0, 1, 2, 3, 4
@@ -94,14 +101,4 @@ function draw() {
     }
   }
 
-  // Display current values (redrawn each frame)
-  noStroke();
-  fill(255, 255, 255, 200); // Semi-transparent white background for text
-  rect(5, 15, 150, 50);
-
-  fill(0);
-  textSize(16);
-  textAlign(LEFT);
-  text(`Current a: ${a}`, 10, 30);
-  text(`Current b: ${(a / 2).toFixed(2)}`, 10, 50);
 }
