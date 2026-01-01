@@ -1,68 +1,126 @@
-const stockData = [
-    { ticker: 'SNDK', percent: 587 },
-    { ticker: 'WDC', percent: 292 },
-    { ticker: 'MU', percent: 226 },
-    { ticker: 'STX', percent: 226 },
-    { ticker: 'PLTR', percent: 155 },
-    { ticker: 'AMD', percent: 99 },
-    { ticker: 'INTC', percent: 80 },
-    { ticker: 'GOOG', percent: 66 },
-    { ticker: 'AMAT', percent: 63 },
-    { ticker: 'AVGO', percent: 48 },
-    { ticker: 'NVDA', percent: 41 },
-    { ticker: 'SHOP', percent: 40 },
-    { ticker: 'NFLX', percent: 36 }
-];
+let particles = [];
+let font;
+let textPoints = [];
+
+function preload() {
+    font = loadFont('https://cdnjs.cloudflare.com/ajax/libs/topcoat/0.8.0/font/SourceCodePro-Bold.otf');
+}
 
 function setup() {
     createCanvas(windowWidth, windowHeight);
-    noLoop();
+
+    // Get points from text
+    let centerX = width / 2;
+    let centerY = height / 2;
+    let radius = min(width, height) * 0.2;
+
+    // Create text points for each letter arranged in a circle
+    let word = 'CIRCLES';
+    let angleStep = TWO_PI / word.length;
+
+    for (let i = 0; i < word.length; i++) {
+        let angle = i * angleStep - HALF_PI; // Start from top
+        let x = centerX + cos(angle) * radius;
+        let y = centerY + sin(angle) * radius;
+
+        // Get points for this letter
+        let bounds = font.textBounds(word[i], 0, 0, 288);
+        let letterPoints = font.textToPoints(word[i], 0, 0, 288, {
+            sampleFactor: 1.5
+        });
+
+        // Rotate and position points
+        for (let pt of letterPoints) {
+            // Center the letter points
+            let offsetX = pt.x - bounds.w / 2;
+            let offsetY = pt.y - bounds.h / 2;
+
+            // Rotate point around origin
+            let rotatedX = offsetX * cos(angle) - offsetY * sin(angle);
+            let rotatedY = offsetX * sin(angle) + offsetY * cos(angle);
+
+            // Position at circle location
+            textPoints.push({
+                x: x + rotatedX,
+                y: y + rotatedY
+            });
+        }
+    }
+
+    // Create flowing particles
+    for (let pt of textPoints) {
+        particles.push(new Particle(pt.x, pt.y));
+    }
 }
 
 function draw() {
     background(0);
 
-    const maxPercent = Math.max(...stockData.map(s => s.percent));
-    const maxSize = min(width, height) * 0.15;
+    // Update and display particles
+    for (let p of particles) {
+        p.update();
+        p.show();
+    }
+}
 
-    const cols = 5;
-    const rows = Math.ceil(stockData.length / cols);
-    const spacingX = width / (cols + 1);
-    const spacingY = height / (rows + 1);
+class Particle {
+    constructor(targetX, targetY) {
+        this.target = createVector(targetX, targetY);
+        this.pos = createVector(random(width), random(height));
+        this.vel = createVector(0, 0);
+        this.acc = createVector(0, 0);
+        this.maxSpeed = 4;
+        this.maxForce = 0.3;
+        this.offset = createVector(random(-2, 2), random(-2, 2));
+    }
 
-    fill(0, 255, 0);
-    noStroke();
-    textAlign(CENTER, CENTER);
-    textSize(16);
+    update() {
+        // Flow effect - add slight random movement
+        let flowAngle = noise(this.pos.x * 0.01, this.pos.y * 0.01, frameCount * 0.01) * TWO_PI * 2;
+        let flow = p5.Vector.fromAngle(flowAngle);
+        flow.mult(0.1);
 
-    stockData.forEach((stock, index) => {
-        const col = index % cols;
-        const row = Math.floor(index / cols);
+        // Seek target with offset
+        let desired = p5.Vector.sub(this.target, this.pos);
+        desired.add(this.offset);
+        let d = desired.mag();
 
-        const x = spacingX * (col + 1);
-        const y = spacingY * (row + 1);
+        if (d < 5) {
+            let m = map(d, 0, 5, 0, this.maxSpeed);
+            desired.setMag(m);
+        } else {
+            desired.setMag(this.maxSpeed);
+        }
 
-        const size = (stock.percent / maxPercent) * maxSize;
+        let steer = p5.Vector.sub(desired, this.vel);
+        steer.limit(this.maxForce);
 
-        // Draw triangle pointing up
-        fill(0, 255, 0);
-        triangle(
-            x, y - size / 2,
-            x - size / 2, y + size / 2,
-            x + size / 2, y + size / 2
-        );
+        this.acc.add(steer);
+        this.acc.add(flow);
 
-        // Draw ticker inside triangle in black
-        fill(0);
-        text(stock.ticker, x, y + size / 6);
+        this.vel.add(this.acc);
+        this.vel.limit(this.maxSpeed);
+        this.pos.add(this.vel);
+        this.acc.mult(0);
+    }
 
-        // Draw percentage below triangle in green
-        fill(0, 255, 0);
-        text(stock.percent + '%', x, y + size / 2 + 20);
-    });
+    show() {
+        // Subtle glowing effect
+        noStroke();
+
+        // Outer glow
+        fill(0, 150, 255, 15);
+        circle(this.pos.x, this.pos.y, 8);
+
+        // Inner bright dot
+        fill(0, 200, 255, 255);
+        circle(this.pos.x, this.pos.y, 4);
+    }
 }
 
 function windowResized() {
     resizeCanvas(windowWidth, windowHeight);
-    redraw();
+    particles = [];
+    textPoints = [];
+    setup();
 }
