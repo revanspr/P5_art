@@ -109,14 +109,14 @@ class Particle {
         this.acc = createVector(0, 0);
         this.maxSpeed = 3;
         this.maxForce = 0.2;
-        this.offset = createVector(random(-2, 2), random(-2, 2));
+        this.offset = createVector(random(-5, 5), random(-5, 5));
     }
 
     update() {
         // Flow effect - add slight random movement
         let flowAngle = noise(this.pos.x * 0.01, this.pos.y * 0.01, frameCount * 0.01) * TWO_PI * 2;
         let flow = p5.Vector.fromAngle(flowAngle);
-        flow.mult(0.1);
+        flow.mult(0.3);
 
         // Seek target with offset
         let desired = p5.Vector.sub(this.target, this.pos);
