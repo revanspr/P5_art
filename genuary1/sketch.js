@@ -15,13 +15,15 @@ function setup() {
     createCanvas(450, 800);
     frameRate(fps);
 
-    // Initialize capturer for automatic recording
-    capturer = new CCapture({
-        format: 'webm',
-        framerate: fps,
-        verbose: true,
-        name: 'circles_animation'
-    });
+    // Initialize capturer for automatic recording (check if CCapture is loaded)
+    if (typeof CCapture !== 'undefined') {
+        capturer = new CCapture({
+            format: 'webm',
+            framerate: fps,
+            verbose: true,
+            name: 'circles_animation'
+        });
+    }
 
     // Get points from text
     let centerX = width / 2;
@@ -71,7 +73,7 @@ function draw() {
     background(0);
 
     // Start recording on first frame
-    if (!recordingStarted) {
+    if (!recordingStarted && capturer) {
         capturer.start();
         recording = true;
         recordingStarted = true;
@@ -101,7 +103,7 @@ function draw() {
 function keyPressed() {
     // Press 'r' to start recording
     if (key === 'r' || key === 'R') {
-        if (!recording) {
+        if (!recording && typeof CCapture !== 'undefined') {
             capturer = new CCapture({
                 format: 'webm',
                 framerate: fps,
