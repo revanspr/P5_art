@@ -1,11 +1,6 @@
 let particles = [];
 let font;
 let textPoints = [];
-let capturer;
-let recording = false;
-let recordingDuration = 10; // seconds
-let fps = 30;
-let recordingStarted = false;
 
 function preload() {
     font = loadFont('https://cdnjs.cloudflare.com/ajax/libs/topcoat/0.8.0/font/SourceCodePro-Bold.otf');
@@ -13,7 +8,6 @@ function preload() {
 
 function setup() {
     createCanvas(450, 800);
-    frameRate(fps);
 
     // Get points from text
     let centerX = width / 2;
@@ -66,38 +60,6 @@ function draw() {
     for (let p of particles) {
         p.update();
         p.show();
-    }
-
-    // Recording logic
-    if (recording && capturer) {
-        capturer.capture(document.getElementById('defaultCanvas0'));
-
-        if (frameCount >= recordingDuration * fps) {
-            recording = false;
-            capturer.stop();
-            capturer.save();
-            console.log('Recording complete! Download will start automatically.');
-            console.log('Note: File will download to your browser Downloads folder.');
-            console.log('Move the WEBM file to your Gen Art folder as needed.');
-        }
-    }
-}
-
-function keyPressed() {
-    // Press 'r' to start recording
-    if (key === 'r' || key === 'R') {
-        if (!recording && typeof CCapture !== 'undefined') {
-            capturer = new CCapture({
-                format: 'webm',
-                framerate: fps,
-                verbose: true
-            });
-
-            recording = true;
-            frameCount = 0;
-            capturer.start();
-            console.log('Recording started...');
-        }
     }
 }
 
