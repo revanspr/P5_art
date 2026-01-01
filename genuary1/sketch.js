@@ -5,6 +5,7 @@ let capturer;
 let recording = false;
 let recordingDuration = 10; // seconds
 let fps = 30;
+let recordingStarted = false;
 
 function preload() {
     font = loadFont('https://cdnjs.cloudflare.com/ajax/libs/topcoat/0.8.0/font/SourceCodePro-Bold.otf');
@@ -13,6 +14,14 @@ function preload() {
 function setup() {
     createCanvas(450, 800);
     frameRate(fps);
+
+    // Initialize capturer for automatic recording
+    capturer = new CCapture({
+        format: 'webm',
+        framerate: fps,
+        verbose: true,
+        name: 'circles_animation'
+    });
 
     // Get points from text
     let centerX = width / 2;
@@ -61,6 +70,14 @@ function setup() {
 function draw() {
     background(0);
 
+    // Start recording on first frame
+    if (!recordingStarted) {
+        capturer.start();
+        recording = true;
+        recordingStarted = true;
+        console.log('Recording started automatically...');
+    }
+
     // Update and display particles
     for (let p of particles) {
         p.update();
@@ -75,7 +92,8 @@ function draw() {
             recording = false;
             capturer.stop();
             capturer.save();
-            console.log('Recording complete!');
+            console.log('Recording complete! Download will start automatically.');
+            console.log('Note: File is in WEBM format. Convert to MP4 using an online converter or FFmpeg.');
         }
     }
 }
