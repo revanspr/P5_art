@@ -1,18 +1,23 @@
 let particles = [];
 let font;
 let textPoints = [];
+let capturer;
+let recording = false;
+let recordingDuration = 10; // seconds
+let fps = 30;
 
 function preload() {
     font = loadFont('https://cdnjs.cloudflare.com/ajax/libs/topcoat/0.8.0/font/SourceCodePro-Bold.otf');
 }
 
 function setup() {
-    createCanvas(windowWidth, windowHeight);
+    createCanvas(450, 800);
+    frameRate(fps);
 
     // Get points from text
     let centerX = width / 2;
     let centerY = height / 2;
-    let radius = min(width, height) * 0.2;
+    let radius = width * 0.3;
 
     // Create text points for each letter arranged in a circle
     let word = 'CIRCLES';
@@ -24,8 +29,8 @@ function setup() {
         let y = centerY + sin(angle) * radius;
 
         // Get points for this letter
-        let bounds = font.textBounds(word[i], 0, 0, 288);
-        let letterPoints = font.textToPoints(word[i], 0, 0, 288, {
+        let bounds = font.textBounds(word[i], 0, 0, 120);
+        let letterPoints = font.textToPoints(word[i], 0, 0, 120, {
             sampleFactor: 1.5
         });
 
@@ -61,6 +66,36 @@ function draw() {
         p.update();
         p.show();
     }
+
+    // Recording logic
+    if (recording) {
+        capturer.capture(document.getElementById('defaultCanvas0'));
+
+        if (frameCount >= recordingDuration * fps) {
+            recording = false;
+            capturer.stop();
+            capturer.save();
+            console.log('Recording complete!');
+        }
+    }
+}
+
+function keyPressed() {
+    // Press 'r' to start recording
+    if (key === 'r' || key === 'R') {
+        if (!recording) {
+            capturer = new CCapture({
+                format: 'webm',
+                framerate: fps,
+                verbose: true
+            });
+
+            recording = true;
+            frameCount = 0;
+            capturer.start();
+            console.log('Recording started...');
+        }
+    }
 }
 
 class Particle {
@@ -69,8 +104,8 @@ class Particle {
         this.pos = createVector(random(width), random(height));
         this.vel = createVector(0, 0);
         this.acc = createVector(0, 0);
-        this.maxSpeed = 4;
-        this.maxForce = 0.3;
+        this.maxSpeed = 3;
+        this.maxForce = 0.2;
         this.offset = createVector(random(-2, 2), random(-2, 2));
     }
 
@@ -105,21 +140,14 @@ class Particle {
     }
 
     show() {
-        // Subtle glowing effect
         noStroke();
-
-        // Outer glow
-        fill(0, 150, 255, 15);
-        circle(this.pos.x, this.pos.y, 8);
-
-        // Inner bright dot
         fill(0, 200, 255, 255);
         circle(this.pos.x, this.pos.y, 4);
     }
 }
 
 function windowResized() {
-    resizeCanvas(windowWidth, windowHeight);
+    resizeCanvas(450, 800);
     particles = [];
     textPoints = [];
     setup();
