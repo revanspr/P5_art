@@ -32,7 +32,7 @@ function setup() {
         // Get points for this letter
         let bounds = font.textBounds(word[i], 0, 0, 120);
         let letterPoints = font.textToPoints(word[i], 0, 0, 120, {
-            sampleFactor: 1.5
+            sampleFactor: 0.5
         });
 
         // Rotate and position points
