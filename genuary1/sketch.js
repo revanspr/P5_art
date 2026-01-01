@@ -12,7 +12,7 @@ function preload() {
 }
 
 function setup() {
-    createCanvas(450, 800);
+    createCanvas(windowWidth, windowHeight);
     frameRate(fps);
 
     // Initialize capturer for automatic recording (check if CCapture is loaded)
@@ -42,8 +42,10 @@ function setup() {
         // Get points for this letter
         let bounds = font.textBounds(word[i], 0, 0, 120);
         let letterPoints = font.textToPoints(word[i], 0, 0, 120, {
-            sampleFactor: 1.5
+            sampleFactor: 0.3
         });
+
+        console.log(`Letter ${word[i]}: ${letterPoints.length} points`);
 
         // Rotate and position points
         for (let pt of letterPoints) {
@@ -126,14 +128,14 @@ class Particle {
         this.acc = createVector(0, 0);
         this.maxSpeed = 3;
         this.maxForce = 0.2;
-        this.offset = createVector(random(-2, 2), random(-2, 2));
+        this.offset = createVector(random(-1, 1), random(-1, 1));
     }
 
     update() {
         // Flow effect - add slight random movement
         let flowAngle = noise(this.pos.x * 0.01, this.pos.y * 0.01, frameCount * 0.01) * TWO_PI * 2;
         let flow = p5.Vector.fromAngle(flowAngle);
-        flow.mult(0.1);
+        flow.mult(0.05);
 
         // Seek target with offset
         let desired = p5.Vector.sub(this.target, this.pos);
@@ -167,7 +169,7 @@ class Particle {
 }
 
 function windowResized() {
-    resizeCanvas(450, 800);
+    resizeCanvas(windowWidth, windowHeight);
     particles = [];
     textPoints = [];
     setup();
