@@ -15,16 +15,6 @@ function setup() {
     createCanvas(450, 800);
     frameRate(fps);
 
-    // Initialize capturer for automatic recording (check if CCapture is loaded)
-    if (typeof CCapture !== 'undefined') {
-        capturer = new CCapture({
-            format: 'webm',
-            framerate: fps,
-            verbose: true,
-            name: 'circles_animation'
-        });
-    }
-
     // Get points from text
     let centerX = width / 2;
     let centerY = height / 2;
@@ -72,14 +62,6 @@ function setup() {
 function draw() {
     background(0);
 
-    // Start recording on first frame
-    if (!recordingStarted && capturer) {
-        capturer.start();
-        recording = true;
-        recordingStarted = true;
-        console.log('Recording started automatically...');
-    }
-
     // Update and display particles
     for (let p of particles) {
         p.update();
@@ -87,7 +69,7 @@ function draw() {
     }
 
     // Recording logic
-    if (recording) {
+    if (recording && capturer) {
         capturer.capture(document.getElementById('defaultCanvas0'));
 
         if (frameCount >= recordingDuration * fps) {
@@ -95,7 +77,8 @@ function draw() {
             capturer.stop();
             capturer.save();
             console.log('Recording complete! Download will start automatically.');
-            console.log('Note: File is in WEBM format. Convert to MP4 using an online converter or FFmpeg.');
+            console.log('Note: File will download to your browser Downloads folder.');
+            console.log('Move the WEBM file to your Gen Art folder as needed.');
         }
     }
 }
