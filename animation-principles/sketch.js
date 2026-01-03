@@ -92,7 +92,9 @@ function setup() {
   setTimeout(() => {
     animationState = 'lookAtButton';
     frameCounter = 0;
-    console.log('Starting animation...');
+    recordFrames = true;
+    totalFrames = 0;
+    console.log('Starting animation and recording...');
   }, 500);
 }
 
@@ -114,6 +116,18 @@ function draw() {
   drawSplash();
 
   frameCounter++;
+
+  // Record frames if recording is active
+  if (recordFrames) {
+    totalFrames++;
+    saveCanvas('PoA' + totalFrames, 'png');
+
+    // Stop recording after 300 frames
+    if (totalFrames >= maxRecordFrames) {
+      recordFrames = false;
+      console.log(`Recording complete! ${totalFrames} frames saved.`);
+    }
+  }
 }
 
 function updateAnimation() {
