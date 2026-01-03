@@ -83,7 +83,7 @@ function setup() {
   ball.x = trapDoor.x;
   ball.y = trapDoor.y + 50;
 
-  water.x = width * 0.55; // Positioned for 1 bounce before pool
+  water.x = width * 0.603; // Positioned closer to character (80% of original distance)
   water.y = height * 0.85;
   water.width = 200; // Pool width
   water.height = height * 0.15; // Pool extends to bottom of screen
