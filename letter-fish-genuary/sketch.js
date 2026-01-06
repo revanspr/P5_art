@@ -6,20 +6,25 @@ const CANVAS_HEIGHT = 1920;
 let isRecording = false; // Set to true to record frames
 let recordingFrameCount = 0;
 const TOTAL_RECORDING_FRAMES = 300; // 300 frames at 30fps = 10 seconds
+let loopCount = 0; // Track which loop we're on
+const START_RECORDING_LOOP = 3; // Start recording on the 3rd loop
 
 let fishes = [];
 let bubbles = [];
 let foodFlakes = [];
 let animationState = 'swimming'; // Start with swimming
 let totalDrops = 0;
-const MAX_DROPS = 2; // Only 2 waves for 10 second reel
-let firstWaveDropped = false;
+const MAX_DROPS = 1; // Only 1 wave for simpler animation
+let foodDropped = false;
 let animationTimer = 0;
 const LOOP_DURATION = 300; // 10 seconds at 30fps
 const SWIM_START_DURATION = 30; // 1 second of swimming at start (at 30fps)
-const FEEDING_START = 30; // Start feeding at 1 second (at 30fps)
-const SECOND_WAVE_START = 120; // Second wave starts at 4 seconds
-const FEEDING_END = 270; // End feeding at 9 seconds, return to swimming for seamless loop
+const FOOD_DROP_TIME = 30; // Drop food at 1 second (at 30fps)
+// Food falls from Y=50 to Y=1152 (60% of 1920) = 1102 pixels at 9 px/frame = ~122 frames
+// At 40% height (768px), food has fallen 718 pixels = ~80 frames from drop
+// So food reaches 40% at frame 30 + 80 = 110
+const FISH_ANTICIPATE_TIME = 110; // Fish start moving when food reaches 40% height
+const FEEDING_END = 240; // End feeding at 8 seconds, return to swimming for seamless loop
 
 // Ornament animation
 let clamOpenAmount = 0;
@@ -34,17 +39,21 @@ function setup() {
     createCanvas(CANVAS_WIDTH, CANVAS_HEIGHT);
     frameRate(30); // Set to 30fps for recording
 
-    // Create many small guppy fish (increased: 400-500 fish for better letter visibility)
-    // Each fish is assigned to one of the 7 flakes (letters)
-    let totalFish = int(random(400, 500));
+    // Create small guppy fish - enough to form clear letter shapes
+    // Each fish is assigned to one of the 7 letters AND a specific food piece within that letter
+    let totalFish = 420; // 60 fish per letter (420 total / 7 letters), 4 fish per food piece (15 pieces per letter)
     for (let i = 0; i < totalFish; i++) {
-        let assignedFlakeIndex = i % 7; // Assign fish to one of 7 flakes (0-6)
+        let assignedLetterIndex = i % 7; // Assign fish to one of 7 letters (0-6)
+        let fishWithinLetter = Math.floor(i / 7); // Which fish this is within its assigned letter (0-59)
+        let assignedPieceIndex = fishWithinLetter % 15; // Assign to one of 15 food pieces within the letter (0-14)
+
         fishes.push(new Guppy(
             random(width),
             random(height / 2, height - 200), // Start in bottom half
             random(TWO_PI),
             i,  // Give each fish a unique index
-            assignedFlakeIndex  // Which flake (letter) this fish belongs to
+            assignedLetterIndex,  // Which letter (0-6) this fish belongs to
+            assignedPieceIndex    // Which food piece (0-14) within the letter this fish targets
         ));
     }
 }
@@ -60,9 +69,19 @@ function draw() {
         if (animationTimer >= LOOP_DURATION) {
             animationTimer = 0;
             totalDrops = 0;
-            firstWaveDropped = false;
+            foodDropped = false;
             foodFlakes = [];
             animationState = 'swimming';
+
+            // Increment loop counter
+            loopCount++;
+
+            // Start recording on the 3rd loop
+            if (loopCount === START_RECORDING_LOOP && !isRecording) {
+                isRecording = true;
+                recordingFrameCount = 0;
+                console.log("Starting recording on loop 3...");
+            }
 
             for (let fish of fishes) {
                 if (fish.targetFlake) {
@@ -70,6 +89,10 @@ function draw() {
                 }
                 fish.targetFlake = null;
                 fish.eating = false;
+                fish.feedingOffset = null;
+                fish.anticipating = false;
+                fish.anticipationPosition = null;
+                fish.returning = false;
             }
         }
     } else if (isRecording && recordingFrameCount < TOTAL_RECORDING_FRAMES) {
@@ -78,21 +101,28 @@ function draw() {
     }
 
     // State transitions for seamless loop
-    if (animationTimer === FEEDING_START) {
-        // Transition from swimming to feeding
+    if (animationTimer === FISH_ANTICIPATE_TIME) {
+        // Fish start moving to anticipation positions
+        animationState = 'anticipating';
+    } else if (animationTimer === FOOD_DROP_TIME) {
+        // Food drops, fish start feeding
         animationState = 'feeding';
     } else if (animationTimer === FEEDING_END) {
-        // Transition back to swimming for seamless loop
-        animationState = 'swimming';
+        // Transition to returning - fish swim back to start positions
+        animationState = 'returning';
         // Clear remaining flakes
         foodFlakes = [];
-        // Reset all fish to swimming state
+        // Set all fish to returning mode
         for (let fish of fishes) {
             if (fish.targetFlake) {
                 fish.targetFlake.releaseFish();
             }
             fish.targetFlake = null;
             fish.eating = false;
+            fish.feedingOffset = null;
+            fish.anticipating = false;
+            fish.anticipationPosition = null; // Clear anticipation position for next loop
+            fish.returning = true;
         }
     }
 
@@ -112,20 +142,11 @@ function draw() {
     // Draw plants
     drawAquariumPlants();
 
-    // Drop food flakes at specific times for 10-second reel
-    if (animationState === 'feeding') {
-        // Drop first wave at start of feeding (frame 30 / 1 second)
-        if (animationTimer === FEEDING_START && !firstWaveDropped) {
-            dropFoodFlakes();
-            firstWaveDropped = true;
-            totalDrops = 1;
-        }
-
-        // Drop second wave at 4 seconds (frame 120) - this will be most legible
-        if (animationTimer === SECOND_WAVE_START && totalDrops === 1) {
-            dropFoodFlakes();
-            totalDrops = 2;
-        }
+    // Drop food at specific time
+    if (animationTimer === FOOD_DROP_TIME && !foodDropped) {
+        dropFoodFlakes();
+        foodDropped = true;
+        totalDrops = 1;
     }
 
     // Update and display food flakes
@@ -141,7 +162,12 @@ function draw() {
 
     // Update and display all fish
     for (let fish of fishes) {
-        if (animationState === 'feeding' && foodFlakes.length > 0) {
+        // Check individual fish state for returning behavior
+        if (fish.returning) {
+            fish.returnToStart();
+        } else if (animationState === 'anticipating') {
+            fish.anticipateFood();
+        } else if (animationState === 'feeding' && foodFlakes.length > 0) {
             fish.feedOnFlakes(foodFlakes);
         } else {
             fish.swim();
@@ -220,12 +246,24 @@ function drawCaveOrnament() {
     push();
     translate(200, height - 150); // On gravel surface
 
-    // Cave structure (gray/brown rock)
-    fill(80, 70, 60);
-    stroke(60, 50, 40);
-    strokeWeight(2);
+    // Cave structure with more realistic shading
+    // Dark shadow base
+    fill(60, 50, 40);
+    noStroke();
+    beginShape();
+    vertex(-85, 0);
+    vertex(-95, -75);
+    vertex(-65, -125);
+    vertex(0, -135);
+    vertex(65, -125);
+    vertex(95, -75);
+    vertex(85, 0);
+    endShape(CLOSE);
 
-    // Cave main body
+    // Main rock body with gradient effect
+    fill(95, 85, 70);
+    stroke(70, 60, 50);
+    strokeWeight(1.5);
     beginShape();
     vertex(-80, 0);
     vertex(-90, -80);
@@ -236,21 +274,60 @@ function drawCaveOrnament() {
     vertex(80, 0);
     endShape(CLOSE);
 
-    // Cave opening (dark)
-    fill(20, 20, 25);
+    // Highlight areas (lighter rock surfaces)
+    fill(110, 100, 85, 180);
+    noStroke();
+    beginShape();
+    vertex(-50, -90);
+    vertex(-40, -115);
+    vertex(-20, -120);
+    vertex(-30, -95);
+    endShape(CLOSE);
+
+    beginShape();
+    vertex(20, -120);
+    vertex(40, -115);
+    vertex(50, -90);
+    vertex(30, -95);
+    endShape(CLOSE);
+
+    // Cave opening (darker with depth)
+    fill(15, 15, 20);
+    ellipse(0, -50, 75, 85);
+    fill(25, 25, 30);
     ellipse(0, -50, 70, 80);
 
-    // Rock texture
-    fill(100, 90, 80, 100);
-    noStroke();
-    ellipse(-40, -70, 30, 25);
-    ellipse(35, -90, 25, 20);
-    ellipse(-20, -110, 20, 18);
+    // Inner shadow detail
+    fill(10, 10, 15);
+    ellipse(0, -35, 50, 40);
 
-    // Moss/algae on rocks
-    fill(40, 80, 40, 120);
-    ellipse(-50, -30, 35, 20);
-    ellipse(40, -40, 30, 18);
+    // Rock texture and cracks
+    stroke(50, 45, 35);
+    strokeWeight(1.5);
+    noFill();
+    // Crack lines
+    bezier(-70, -60, -60, -70, -50, -80, -45, -95);
+    bezier(45, -95, 50, -80, 60, -70, 70, -60);
+    bezier(-20, -120, -10, -125, 10, -125, 20, -120);
+
+    // Small rock details
+    fill(85, 75, 60, 120);
+    noStroke();
+    ellipse(-55, -75, 35, 30);
+    ellipse(45, -90, 30, 25);
+    ellipse(-25, -115, 25, 20);
+    ellipse(15, -105, 20, 18);
+
+    // Moss/algae with more detail
+    fill(35, 75, 35, 140);
+    ellipse(-60, -30, 40, 25);
+    ellipse(-50, -25, 30, 20);
+    fill(40, 85, 40, 120);
+    ellipse(50, -40, 35, 22);
+    ellipse(40, -35, 25, 18);
+    fill(30, 65, 30, 100);
+    ellipse(-35, -50, 20, 15);
+    ellipse(25, -55, 18, 13);
 
     pop();
 
@@ -262,34 +339,91 @@ function drawClam(x, y) {
     push();
     translate(x, y);
 
-    // Bottom shell
-    fill(180, 160, 140);
-    stroke(140, 120, 100);
+    // Bottom shell with shading
+    // Dark shadow
+    fill(140, 120, 100);
+    noStroke();
+    arc(0, 2, 85, 52, 0, PI);
+
+    // Main bottom shell
+    fill(170, 150, 130);
+    stroke(130, 110, 90);
     strokeWeight(2);
     arc(0, 0, 80, 50, 0, PI);
+
+    // Bottom shell highlight
+    fill(190, 170, 150, 150);
+    noStroke();
+    arc(-10, -3, 30, 20, 0, PI);
+
+    // Bottom shell ridges (radial lines)
+    stroke(120, 100, 80);
+    strokeWeight(1.5);
+    for (let i = -35; i <= 35; i += 8) {
+        let angle = map(i, -35, 35, 0, PI);
+        let x1 = cos(angle) * 25;
+        let y1 = sin(angle) * 15;
+        let x2 = cos(angle) * 40;
+        let y2 = sin(angle) * 25;
+        line(x1, y1, x2, y2);
+    }
 
     // Top shell (opens and closes)
     push();
     rotate(-clamOpenAmount);
-    fill(190, 170, 150);
-    stroke(150, 130, 110);
+
+    // Top shell shadow
+    fill(150, 130, 110);
+    noStroke();
+    arc(0, -2, 85, 52, PI, TWO_PI);
+
+    // Main top shell
+    fill(180, 160, 140);
+    stroke(140, 120, 100);
+    strokeWeight(2);
     arc(0, 0, 80, 50, PI, TWO_PI);
 
-    // Shell ridges
+    // Top shell highlight
+    fill(200, 180, 160, 150);
+    noStroke();
+    arc(10, 3, 30, 20, PI, TWO_PI);
+
+    // Top shell ridges (radial lines)
     stroke(130, 110, 90);
-    strokeWeight(1);
-    for (let i = -30; i < 30; i += 10) {
-        line(i, -5, i, -20);
+    strokeWeight(1.5);
+    for (let i = -35; i <= 35; i += 8) {
+        let angle = map(i, -35, 35, PI, TWO_PI);
+        let x1 = cos(angle) * 25;
+        let y1 = sin(angle) * 15;
+        let x2 = cos(angle) * 40;
+        let y2 = sin(angle) * 25;
+        line(x1, y1, x2, y2);
     }
     pop();
 
     // Pearl inside when open
     if (clamOpenAmount > 0.3) {
-        fill(255, 250, 240);
+        // Pearl shadow
+        fill(220, 215, 205, 100);
         noStroke();
-        ellipse(0, -5, 15, 15);
-        fill(255, 255, 255, 200);
-        ellipse(-2, -7, 6, 6);
+        ellipse(1, -3, 18, 18);
+
+        // Main pearl
+        fill(245, 240, 230);
+        ellipse(0, -5, 16, 16);
+
+        // Pearl highlights
+        fill(255, 255, 255, 220);
+        ellipse(-3, -8, 7, 7);
+        fill(255, 255, 255, 150);
+        ellipse(2, -4, 4, 4);
+    }
+
+    // Clam meat/body slightly visible when open
+    if (clamOpenAmount > 0.2) {
+        fill(240, 200, 180, 100);
+        noStroke();
+        ellipse(0, -2, 35, 15);
     }
 
     pop();
@@ -299,19 +433,74 @@ function drawCastleOrnament() {
     push();
     translate(width - 200, height - 150); // Moved right and on gravel surface
 
-    // Castle base
-    fill(160, 160, 180);
-    stroke(120, 120, 140);
+    // Castle shadows
+    fill(120, 120, 135);
+    noStroke();
+    rect(-103, -77, 206, 80);
+    rect(-93, -177, 63, 100);
+    rect(27, -177, 63, 100);
+    rect(-33, -137, 63, 60);
+
+    // Castle base with stone texture
+    fill(150, 150, 170);
+    stroke(110, 110, 130);
     strokeWeight(2);
     rect(-100, -80, 200, 80);
 
-    // Castle towers
+    // Stone brick lines on base
+    stroke(130, 130, 150);
+    strokeWeight(1);
+    for (let y = -70; y > -80; y -= 20) {
+        line(-100, y, 100, y);
+    }
+    for (let x = -80; x < 100; x += 30) {
+        line(x, -80, x, 0);
+    }
+
+    // Castle towers with depth
+    fill(155, 155, 175);
+    stroke(115, 115, 135);
+    strokeWeight(2);
     rect(-90, -180, 60, 100);
     rect(30, -180, 60, 100);
     rect(-30, -140, 60, 60);
 
-    // Tower tops (battlements)
-    fill(140, 140, 160);
+    // Tower highlights
+    fill(170, 170, 190, 120);
+    noStroke();
+    rect(-85, -175, 15, 90);
+    rect(35, -175, 15, 90);
+    rect(-25, -135, 15, 50);
+
+    // Stone brick texture on towers
+    stroke(135, 135, 155);
+    strokeWeight(1);
+    // Left tower
+    for (let y = -170; y > -180; y -= 20) {
+        line(-90, y, -30, y);
+    }
+    for (let x = -80; x < -30; x += 20) {
+        line(x, -180, x, -80);
+    }
+    // Right tower
+    for (let y = -170; y > -180; y -= 20) {
+        line(30, y, 90, y);
+    }
+    for (let x = 40; x < 90; x += 20) {
+        line(x, -180, x, -80);
+    }
+    // Center tower
+    for (let y = -130; y > -140; y -= 20) {
+        line(-30, y, 30, y);
+    }
+    for (let x = -20; x < 30; x += 20) {
+        line(x, -140, x, -80);
+    }
+
+    // Tower tops (battlements) with more detail
+    fill(135, 135, 155);
+    stroke(105, 105, 125);
+    strokeWeight(2);
     for (let i = -90; i < -30; i += 15) {
         rect(i, -190, 10, 10);
     }
@@ -322,22 +511,70 @@ function drawCastleOrnament() {
         rect(i, -150, 10, 10);
     }
 
-    // Windows
-    fill(60, 60, 80);
+    // Windows with depth
+    // Window shadows
+    fill(40, 40, 55);
+    noStroke();
+    rect(-69, -149, 20, 30);
+    rect(51, -149, 20, 30);
+    rect(-9, -119, 20, 25);
+
+    // Window frames
+    fill(50, 50, 65);
+    stroke(30, 30, 45);
+    strokeWeight(2);
     rect(-70, -150, 20, 30);
     rect(50, -150, 20, 30);
     rect(-10, -120, 20, 25);
 
-    // Door
-    fill(80, 60, 40);
+    // Window cross bars
+    stroke(60, 60, 75);
+    strokeWeight(1.5);
+    line(-60, -135, -60, -120);
+    line(-70, -135, -50, -135);
+    line(60, -135, 60, -120);
+    line(50, -135, 70, -135);
+    line(0, -107.5, 0, -95);
+    line(-10, -107.5, 10, -107.5);
+
+    // Door with depth and details
+    // Door shadow
+    fill(60, 45, 25);
+    noStroke();
+    arc(0, -39, 42, 62, PI, TWO_PI);
+    rect(-21, -39, 42, 42);
+
+    // Door frame
+    fill(70, 55, 35);
+    stroke(50, 40, 25);
+    strokeWeight(2);
     arc(0, -40, 40, 60, PI, TWO_PI);
     rect(-20, -40, 40, 40);
 
-    // Moss/algae
-    fill(40, 80, 40, 120);
+    // Door planks
+    stroke(60, 45, 25);
+    strokeWeight(1.5);
+    for (let y = -35; y < 0; y += 8) {
+        line(-20, y, 20, y);
+    }
+
+    // Door handle
+    fill(140, 120, 70);
+    stroke(100, 85, 50);
+    strokeWeight(1);
+    ellipse(8, -20, 5, 5);
+
+    // Moss/algae with more variety
+    fill(35, 75, 35, 140);
     noStroke();
-    ellipse(-80, -50, 30, 20);
-    ellipse(60, -60, 35, 22);
+    ellipse(-85, -50, 35, 22);
+    ellipse(-75, -45, 25, 18);
+    fill(40, 85, 40, 120);
+    ellipse(65, -60, 38, 24);
+    ellipse(55, -55, 28, 20);
+    fill(30, 65, 30, 100);
+    ellipse(-20, -15, 25, 15);
+    ellipse(15, -20, 22, 14);
 
     pop();
 
@@ -349,48 +586,171 @@ function drawTreasureChest(x, y) {
     push();
     translate(x, y);
 
-    // Chest bottom
-    fill(101, 67, 33);
-    stroke(70, 45, 20);
+    // Chest shadow
+    fill(70, 45, 20);
+    noStroke();
+    rect(-42, -18, 84, 42, 5);
+
+    // Chest bottom with wood grain
+    fill(95, 63, 31);
+    stroke(65, 40, 18);
     strokeWeight(2);
     rect(-40, -20, 80, 40, 5);
+
+    // Wood planks on bottom
+    stroke(75, 50, 23);
+    strokeWeight(1);
+    for (let x = -35; x < 40; x += 16) {
+        line(x, -20, x, 20);
+    }
+
+    // Bottom highlights
+    fill(115, 80, 40, 100);
+    noStroke();
+    rect(-38, -18, 20, 35, 3);
+
+    // Metal corners on bottom
+    fill(160, 140, 90);
+    stroke(120, 100, 60);
+    strokeWeight(1.5);
+    // Corner brackets
+    rect(-38, -18, 8, 8);
+    rect(30, -18, 8, 8);
+    rect(-38, 10, 8, 8);
+    rect(30, 10, 8, 8);
 
     // Chest lid
     push();
     translate(0, -20);
     rotate(-chestOpenAmount);
-    fill(110, 75, 38);
-    stroke(75, 50, 23);
+
+    // Lid shadow
+    fill(75, 50, 23);
+    noStroke();
+    arc(0, -1, 84, 44, PI, TWO_PI);
+    rect(-42, -1, 84, 12);
+
+    // Main lid
+    fill(105, 72, 36);
+    stroke(70, 45, 20);
+    strokeWeight(2);
     arc(0, 0, 80, 40, PI, TWO_PI);
     rect(-40, 0, 80, 10);
 
-    // Metal bands
-    stroke(180, 160, 100);
-    strokeWeight(3);
+    // Wood grain on lid
+    stroke(85, 58, 28);
+    strokeWeight(1);
+    for (let x = -35; x < 40; x += 16) {
+        let startY = 0;
+        let endY = -sqrt(400 - x * x) * 0.5; // Follow arc curve
+        if (!isNaN(endY)) {
+            line(x, startY, x, endY);
+        }
+    }
+
+    // Lid highlight
+    fill(125, 90, 45, 100);
+    noStroke();
+    arc(-10, 0, 30, 25, PI, TWO_PI);
+
+    // Metal bands with rivets
+    stroke(170, 150, 95);
+    strokeWeight(3.5);
     line(-30, -15, -30, 5);
-    line(30, -15, 30, 5);
     line(0, -15, 0, 5);
+    line(30, -15, 30, 5);
+
+    // Rivets on bands
+    fill(180, 160, 100);
+    noStroke();
+    // Left band
+    ellipse(-30, -12, 4, 4);
+    ellipse(-30, -5, 4, 4);
+    ellipse(-30, 2, 4, 4);
+    // Middle band
+    ellipse(0, -12, 4, 4);
+    ellipse(0, -5, 4, 4);
+    ellipse(0, 2, 4, 4);
+    // Right band
+    ellipse(30, -12, 4, 4);
+    ellipse(30, -5, 4, 4);
+    ellipse(30, 2, 4, 4);
+
     pop();
 
-    // Lock
-    fill(180, 160, 100);
-    stroke(140, 120, 70);
+    // Lock with more detail
+    // Lock shadow
+    fill(140, 120, 70);
+    noStroke();
+    ellipse(1, -9, 14, 14);
+
+    // Lock body
+    fill(170, 150, 90);
+    stroke(130, 110, 65);
     strokeWeight(2);
     ellipse(0, -10, 12, 12);
 
+    // Lock keyhole
+    fill(40, 30, 15);
+    noStroke();
+    ellipse(0, -10, 4, 5);
+    triangle(-1, -8, 1, -8, 0, -5);
+
+    // Lock highlight
+    fill(200, 180, 120, 150);
+    noStroke();
+    ellipse(-2, -12, 4, 4);
+
     // Treasure inside when open
     if (chestOpenAmount > 0.5) {
-        // Gold coins
-        fill(255, 215, 0);
-        ellipse(-10, -25, 12, 12);
-        ellipse(5, -28, 10, 10);
-        ellipse(-5, -30, 11, 11);
+        // More elaborate treasure
+        // Gold coins with detail
+        for (let i = 0; i < 6; i++) {
+            let coinX = random(-15, 15);
+            let coinY = random(-32, -22);
+            // Coin shadow
+            fill(200, 170, 0);
+            noStroke();
+            ellipse(coinX + 1, coinY + 1, 11, 11);
+            // Coin
+            fill(255, 215, 0);
+            ellipse(coinX, coinY, 10, 10);
+            // Coin highlight
+            fill(255, 240, 100);
+            ellipse(coinX - 2, coinY - 2, 4, 4);
+        }
 
-        // Gems
+        // Gems with sparkle
+        // Ruby
+        fill(200, 30, 70);
+        noStroke();
+        ellipse(10, -28, 9, 9);
         fill(255, 50, 100);
-        ellipse(10, -26, 8, 8);
+        ellipse(10, -28, 7, 7);
+        fill(255, 150, 180);
+        ellipse(8, -30, 3, 3);
+
+        // Sapphire
+        fill(30, 100, 200);
+        ellipse(-8, -30, 10, 10);
         fill(50, 150, 255);
-        ellipse(15, -23, 7, 7);
+        ellipse(-8, -30, 8, 8);
+        fill(150, 200, 255);
+        ellipse(-10, -32, 3, 3);
+
+        // Emerald
+        fill(20, 150, 80);
+        ellipse(5, -25, 8, 8);
+        fill(40, 200, 120);
+        ellipse(5, -25, 6, 6);
+        fill(120, 255, 180);
+        ellipse(3, -27, 2, 2);
+
+        // Pearl
+        fill(235, 230, 220);
+        ellipse(-12, -26, 7, 7);
+        fill(255, 255, 255, 200);
+        ellipse(-13, -27, 3, 3);
     }
 
     pop();
@@ -478,7 +838,7 @@ function drawWaterEffects() {
 function animateClam() {
     clamTimer++;
 
-    if (clamState === 'closed' && clamTimer > 180) {
+    if (clamState === 'closed' && clamTimer > 90) { // Opens more frequently (was 180)
         clamState = 'opening';
         clamTimer = 0;
     } else if (clamState === 'opening') {
@@ -486,12 +846,12 @@ function animateClam() {
         if (clamOpenAmount > PI / 3 - 0.1) {
             clamState = 'open';
             clamTimer = 0;
-            // Release bubbles (doubled count)
-            for (let i = 0; i < 10; i++) {
+            // Release more bubbles more frequently
+            for (let i = 0; i < 15; i++) { // More bubbles (was 10)
                 bubbles.push(new Bubble(280, height - 150));
             }
         }
-    } else if (clamState === 'open' && clamTimer > 90) {
+    } else if (clamState === 'open' && clamTimer > 45) { // Stays open shorter (was 90)
         clamState = 'closing';
         clamTimer = 0;
     } else if (clamState === 'closing') {
@@ -507,7 +867,7 @@ function animateClam() {
 function animateChest() {
     chestTimer++;
 
-    if (chestState === 'closed' && chestTimer > 200) {
+    if (chestState === 'closed' && chestTimer > 120) { // Opens more frequently (was 200)
         chestState = 'opening';
         chestTimer = 0;
     } else if (chestState === 'opening') {
@@ -515,12 +875,12 @@ function animateChest() {
         if (chestOpenAmount > PI / 2.5 - 0.1) {
             chestState = 'open';
             chestTimer = 0;
-            // Release bubbles (doubled count)
-            for (let i = 0; i < 12; i++) {
+            // Release more bubbles, different amount than clam
+            for (let i = 0; i < 20; i++) { // More bubbles than clam (was 12)
                 bubbles.push(new Bubble(width - 350, height - 150));
             }
         }
-    } else if (chestState === 'open' && chestTimer > 100) {
+    } else if (chestState === 'open' && chestTimer > 60) { // Stays open shorter (was 100)
         chestState = 'closing';
         chestTimer = 0;
     } else if (chestState === 'closing') {
@@ -550,7 +910,7 @@ function dropFoodFlakes() {
     const word = "GENUARY"; // Uppercase for better visibility
     const PIECES_PER_LETTER = 15; // More pieces for clearer letter formation
 
-    const letterSpacing = 150; // Spacing between letters (matches FoodFlake spacing)
+    const letterSpacing = 135; // Spacing between letters (adjusted)
     const totalWidth = word.length * letterSpacing;
     const startX = (width - totalWidth) / 2 + letterSpacing / 2;
     const baseY = 50; // Starting height (near top)
@@ -581,23 +941,35 @@ function getLetterClusterPositions(letter) {
     // Returns 15 key positions where pieces should settle to form letter shape
     // Fish will cluster densely around these pieces
     let positions = [];
-    let scale = 60; // Even larger scale for clearly visible letters on 1920px tall canvas
+    let scale = 38; // Adjusted for 45-55% zone (reduced from 42)
 
     switch(letter) {
         case 'G':
+            // Improved G with clearer top and bottom, stronger right bar
             positions = [
-                {x: -2*scale, y: -3*scale}, {x: -2*scale, y: -1.5*scale}, {x: -2*scale, y: 0}, {x: -2*scale, y: 1.5*scale}, {x: -2*scale, y: 3*scale},
-                {x: 0, y: -3*scale}, {x: 1*scale, y: -3*scale}, {x: 2*scale, y: -3*scale},
-                {x: 0, y: 3*scale}, {x: 1*scale, y: 3*scale}, {x: 2*scale, y: 3*scale},
-                {x: 2*scale, y: 1.5*scale}, {x: 0, y: 0}, {x: 1*scale, y: 0}, {x: 0.5*scale, y: 1.5*scale}
+                // Left vertical stroke (5 points)
+                {x: -2*scale, y: -2.5*scale}, {x: -2*scale, y: -1.25*scale}, {x: -2*scale, y: 0}, {x: -2*scale, y: 1.25*scale}, {x: -2*scale, y: 2.5*scale},
+                // Top horizontal (3 points)
+                {x: -0.5*scale, y: -2.5*scale}, {x: 0.75*scale, y: -2.5*scale}, {x: 2*scale, y: -2.5*scale},
+                // Bottom horizontal (3 points)
+                {x: -0.5*scale, y: 2.5*scale}, {x: 0.75*scale, y: 2.5*scale}, {x: 2*scale, y: 2.5*scale},
+                // Right vertical bar with horizontal (4 points)
+                {x: 2*scale, y: 1.25*scale}, {x: 2*scale, y: 0}, {x: 0.75*scale, y: 0}, {x: 0*scale, y: 0}
             ];
             break;
         case 'E':
+            // Improved E with more balanced horizontal bars
             positions = [
-                {x: -2*scale, y: -3*scale}, {x: -2*scale, y: -1.5*scale}, {x: -2*scale, y: 0}, {x: -2*scale, y: 1.5*scale}, {x: -2*scale, y: 3*scale},
-                {x: 0, y: -3*scale}, {x: 1*scale, y: -3*scale}, {x: 1.5*scale, y: -3*scale},
-                {x: 0, y: 0}, {x: 0.5*scale, y: 0}, {x: 1*scale, y: 0},
-                {x: 0, y: 3*scale}, {x: 1*scale, y: 3*scale}, {x: 1.5*scale, y: 3*scale}, {x: -1*scale, y: -1.5*scale}
+                // Left vertical stroke (5 points)
+                {x: -2*scale, y: -2.5*scale}, {x: -2*scale, y: -1.25*scale}, {x: -2*scale, y: 0}, {x: -2*scale, y: 1.25*scale}, {x: -2*scale, y: 2.5*scale},
+                // Top horizontal (3 points)
+                {x: -0.5*scale, y: -2.5*scale}, {x: 0.75*scale, y: -2.5*scale}, {x: 1.75*scale, y: -2.5*scale},
+                // Middle horizontal (3 points)
+                {x: -0.5*scale, y: 0}, {x: 0.5*scale, y: 0}, {x: 1.25*scale, y: 0},
+                // Bottom horizontal (3 points)
+                {x: -0.5*scale, y: 2.5*scale}, {x: 0.75*scale, y: 2.5*scale}, {x: 1.75*scale, y: 2.5*scale},
+                // Extra point for definition
+                {x: -1*scale, y: -1.25*scale}
             ];
             break;
         case 'N':
@@ -719,24 +1091,25 @@ class FoodFlake {
         let allPositions = getLetterClusterPositions(letter);
         let myPosition = allPositions[pieceIndex % allPositions.length];
 
-        // Calculate letter center position - centered horizontally, 50% down vertically
-        const letterSpacing = 150; // Spacing between letter centers (wider for clarity)
+        // Calculate letter center position - centered horizontally, at 50% down
+        const letterSpacing = 135; // Spacing between letter centers (adjusted)
         const totalWidth = 6 * letterSpacing; // 6 gaps between 7 letters
         const firstLetterX = (width - totalWidth) / 2;
         let letterCenterX = firstLetterX + letterIndex * letterSpacing;
-        let letterCenterY = height * 0.50; // Letters at 50% height (middle of screen)
+        let letterCenterY = height * 0.50; // Letters at 50% height (in feeding zone 45-55%)
 
         // Target position spreads out from letter center to form the shape
         this.targetX = letterCenterX + myPosition.x;
         this.targetY = letterCenterY + myPosition.y;
 
         this.size = random(6, 9); // Small pieces
-        this.fallSpeed = random(2.5, 3.2);
+        this.fallSpeed = random(8, 10); // Fast fall so food settles quickly
         this.wobble = random(0.01, 0.03);
         this.wobbleOffset = random(TWO_PI);
         this.fishEating = 0; // Number of fish eating this piece
         this.eatenAmount = 0; // How much has been eaten (0-1)
         this.settled = false;
+        this.settledFrames = 0; // How many frames has this been settled
         this.waveNumber = waveNumber; // Track which wave (1 or 2)
 
         // Letter this piece represents
@@ -771,18 +1144,25 @@ class FoodFlake {
             // Settle when reaching target Y
             if (this.y >= this.targetY) {
                 this.y = this.targetY;
-                this.x = lerp(this.x, this.targetX, 0.15);
-                if (abs(this.x - this.targetX) < 2) {
+                this.x = lerp(this.x, this.targetX, 0.3); // Faster X convergence
+                // More lenient settling condition - settle as soon as Y is reached
+                if (abs(this.x - this.targetX) < 10) {
                     this.settled = true;
                     this.x = this.targetX; // Snap to exact position
                 }
             }
         }
 
-        // Get eaten by fish (fish start eating once pieces reach 33%)
-        if (this.fishEating > 0) {
-            // First wave eats much faster, second wave eats VERY slowly for better legibility
-            let eatRate = this.waveNumber === 1 ? 0.015 : 0.003;
+        // Track how long this has been settled
+        if (this.settled) {
+            this.settledFrames++;
+        }
+
+        // Get eaten by fish - but only if settled for at least 5 frames
+        // This prevents food from disappearing the instant it settles
+        if (this.fishEating > 0 && this.settledFrames >= 5) {
+            // Slow eating rate so letters stay visible for a while
+            let eatRate = 0.003;
             this.eatenAmount += eatRate * this.fishEating;
             if (this.eatenAmount > 1) {
                 this.eatenAmount = 1;
@@ -819,7 +1199,7 @@ class FoodFlake {
 }
 
 class Guppy {
-    constructor(x, y, startAngle, fishIndex, assignedFlakeIndex) {
+    constructor(x, y, startAngle, fishIndex, assignedLetterIndex, assignedPieceIndex) {
         this.x = x;
         this.y = y;
         this.angle = startAngle;
@@ -841,41 +1221,50 @@ class Guppy {
         this.wiggle = 0;
         this.finOffset = random(TWO_PI);
         this.fishIndex = fishIndex;
-        this.assignedFlakeIndex = assignedFlakeIndex; // Which flake (0-6) this fish is assigned to
+        this.assignedLetterIndex = assignedLetterIndex; // Which letter (0-6) this fish is assigned to
+        this.assignedPieceIndex = assignedPieceIndex; // Which food piece (0-14) within the letter
 
         // Feeding behavior
         this.targetFlake = null;
         this.eating = false;
+        this.feedingOffset = null; // Random offset around food for natural clustering
+        this.anticipating = false;
+        this.anticipationPosition = null; // Where fish will wait for food
+
+        // Store starting position for seamless loop
+        this.startX = x;
+        this.startY = y;
+        this.returning = false; // Whether fish is returning to start position
     }
 
     swim() {
-        // More natural swimming with varied vertical movement
+        // Natural swimming behavior - stay in bottom half of aquarium
         let nearby = this.findNearbyFish();
         let alignment = createVector(0, 0);
         let cohesion = createVector(0, 0);
         let separation = createVector(0, 0);
 
         if (nearby.length > 0) {
-            // Weaker alignment to prevent horizontal clustering
+            // Extremely weak alignment for independent movement
             for (let other of nearby) {
                 alignment.add(createVector(cos(other.angle), sin(other.angle)));
             }
             alignment.div(nearby.length);
-            alignment.mult(0.02); // Reduced from 0.05
+            alignment.mult(0.001); // Extremely weak (was 0.005)
 
-            // Weaker cohesion for more dispersal
+            // Extremely weak cohesion for maximum dispersal
             for (let other of nearby) {
                 cohesion.add(createVector(other.x, other.y));
             }
             cohesion.div(nearby.length);
             cohesion.sub(createVector(this.x, this.y));
             cohesion.normalize();
-            cohesion.mult(0.01); // Reduced from 0.02
+            cohesion.mult(0.0005); // Extremely weak (was 0.002)
 
-            // Stronger separation to prevent clustering
+            // Very strong separation to keep fish well dispersed
             for (let other of nearby) {
                 let d = dist(this.x, this.y, other.x, other.y);
-                if (d < 60 && d > 0) { // Increased from 40
+                if (d < 100 && d > 0) { // Larger radius for more separation (was 80)
                     let diff = createVector(this.x - other.x, this.y - other.y);
                     diff.div(d);
                     separation.add(diff);
@@ -883,16 +1272,29 @@ class Guppy {
             }
             if (nearby.length > 0) {
                 separation.div(nearby.length);
-                separation.mult(0.15); // Increased from 0.1
+                separation.mult(0.5); // Even stronger separation (was 0.3)
             }
         }
 
-        // Apply forces with more randomness
-        let targetAngle = this.angle + alignment.heading() * 0.2 + cohesion.heading() * 0.1 + separation.heading() * 0.5;
-        this.angle = lerp(this.angle, targetAngle, 0.08);
+        // If fish is in top half, add strong downward bias to return to bottom
+        let returnHome = createVector(0, 0);
+        if (this.y < height * 0.5) {
+            // Create downward force proportional to how high up we are
+            let distanceAbove = height * 0.5 - this.y;
+            returnHome.y = distanceAbove * 0.002; // Gentle pull downward
+            returnHome.mult(2); // Stronger return force
+        }
 
-        // Strong random wandering for varied paths
-        this.angle += random(-0.2, 0.2); // Increased from -0.08, 0.08
+        // Apply forces with minimal influence for maximum independence
+        let targetAngle = this.angle +
+            alignment.heading() * 0.05 +
+            cohesion.heading() * 0.02 +
+            separation.heading() * 0.6 + // Stronger separation influence
+            returnHome.heading() * 0.3;
+        this.angle = lerp(this.angle, targetAngle, 0.05); // Slower turn rate for smoother movement
+
+        // Very strong random wandering for highly varied, independent paths
+        this.angle += random(-0.3, 0.3); // Increased randomness (was -0.2, 0.2)
 
         // Vary speed for more natural movement
         let speedVariation = sin(frameCount * 0.05 + this.fishIndex) * 0.3;
@@ -902,18 +1304,111 @@ class Guppy {
         this.x += cos(this.angle) * currentSpeed;
         this.y += sin(this.angle) * currentSpeed;
 
-        // Wrap around edges smoothly
-        if (this.x < -this.size) this.x = width + this.size;
-        if (this.x > width + this.size) this.x = -this.size;
+        // Keep fish within frame boundaries (no wrapping)
+        // Left and right boundaries
+        if (this.x < this.size * 2) {
+            this.x = this.size * 2;
+            this.angle = random(-PI/3, PI/3); // Point right
+        }
+        if (this.x > width - this.size * 2) {
+            this.x = width - this.size * 2;
+            this.angle = random(PI - PI/3, PI + PI/3); // Point left
+        }
 
-        // Gentler boundary behavior with more vertical variation
+        // Top and bottom boundaries
         if (this.y < height * 0.5) {
-            this.y = height * 0.5 + random(0, 20);
-            this.angle = random(0, PI); // Random downward angle
+            // Bias angle downward when at boundary
+            if (sin(this.angle) < 0) { // Swimming upward
+                this.angle = random(0, PI); // Point downward
+            }
         }
         if (this.y > height - 170) {
             this.y = height - 170 - random(0, 20);
             this.angle = random(PI, TWO_PI); // Random upward angle
+        }
+
+        this.wiggle += this.wobble;
+    }
+
+    returnToStart() {
+        // Swim back to starting position for seamless loop
+        let dx = this.startX - this.x;
+        let dy = this.startY - this.y;
+        let distance = sqrt(dx * dx + dy * dy);
+
+        if (distance > 20) {
+            // Still returning to start position
+            let targetAngle = atan2(dy, dx);
+            this.angle = lerp(this.angle, targetAngle, 0.1);
+            let moveSpeed = this.speed * 2.5; // Moderate speed to return
+            this.x += cos(this.angle) * moveSpeed;
+            this.y += sin(this.angle) * moveSpeed;
+        } else {
+            // Close to start - transition to normal swimming
+            this.returning = false;
+            this.swim();
+        }
+
+        this.wiggle += this.wobble;
+    }
+
+    anticipateFood() {
+        // Calculate position in feeding zone (40-50% height) and swim there to wait
+        if (!this.anticipationPosition) {
+            // Calculate the target position for our assigned food piece
+            const word = "GENUARY";
+            let letter = word[this.assignedLetterIndex];
+            let allPositions = getLetterClusterPositions(letter);
+            let myPosition = allPositions[this.assignedPieceIndex % allPositions.length];
+
+            const letterSpacing = 135; // Spacing between letter centers (adjusted)
+            const totalWidth = 6 * letterSpacing;
+            const firstLetterX = (width - totalWidth) / 2;
+            let letterCenterX = firstLetterX + this.assignedLetterIndex * letterSpacing;
+
+            // Food will settle at 50%, fish wait in feeding zone (45-55%)
+            // Position fish proportionally in the feeding zone based on where food will land
+            let foodTargetY = height * 0.50; // Where food will settle
+            let feedingZoneTop = height * 0.45;
+            let feedingZoneBottom = height * 0.55;
+
+            // Center of feeding zone
+            let letterCenterY = height * 0.50; // Center of feeding zone
+
+            let targetX = letterCenterX + myPosition.x;
+            let targetY = letterCenterY + myPosition.y;
+
+            // Clamp to feeding zone
+            targetY = constrain(targetY, feedingZoneTop, feedingZoneBottom);
+
+            // Add random offset for natural clustering (tighter for clearer letters)
+            let angle = random(TWO_PI);
+            let radius = random(2, 8); // Reduced max radius for tighter clustering (was 12)
+            this.anticipationPosition = {
+                x: targetX + cos(angle) * radius,
+                y: targetY + sin(angle) * radius
+            };
+            this.anticipating = true;
+        }
+
+        // Swim to anticipation position
+        let dx = this.anticipationPosition.x - this.x;
+        let dy = this.anticipationPosition.y - this.y;
+        let distance = sqrt(dx * dx + dy * dy);
+
+        if (distance > 10) {
+            // Still swimming to position
+            let targetAngle = atan2(dy, dx);
+            this.angle = lerp(this.angle, targetAngle, 0.15);
+            let moveSpeed = this.speed * 3; // Fast movement to position
+            this.x += cos(this.angle) * moveSpeed;
+            this.y += sin(this.angle) * moveSpeed;
+        } else {
+            // At position - gentle hovering/waiting
+            this.x = lerp(this.x, this.anticipationPosition.x, 0.05);
+            this.y = lerp(this.y, this.anticipationPosition.y, 0.05);
+            // Small random movements while waiting
+            this.angle += random(-0.1, 0.1);
         }
 
         this.wiggle += this.wobble;
@@ -933,75 +1428,93 @@ class Guppy {
     }
 
     feedOnFlakes(flakes) {
-        // Simple behavior: find closest food from my assigned letter and swim to it
+        // Each fish targets its specifically assigned food piece
 
         // If current target is eaten, release it
         if (this.targetFlake && this.targetFlake.isEaten()) {
             this.targetFlake.releaseFish();
             this.targetFlake = null;
             this.eating = false;
+            this.feedingOffset = null;
         }
 
-        // Find a food piece to target (if we don't have one)
+        // Find the specific food piece assigned to this fish (if we don't have one)
         if (!this.targetFlake) {
-            let closestFlake = null;
-            let closestDist = Infinity;
-            const DETECTION_HEIGHT = height * 0.33; // Fish notice flakes at 33% from top
+            let targetFlake = null;
 
             for (let flake of flakes) {
-                // Only look at food from my assigned letter
-                if (flake.letterIndex === this.assignedFlakeIndex) {
-                    // Only target visible flakes that aren't eaten
-                    if (flake.y >= DETECTION_HEIGHT && !flake.isEaten()) {
-                        let d = dist(this.x, this.y, flake.x, flake.y);
-                        if (d < closestDist) {
-                            closestDist = d;
-                            closestFlake = flake;
-                        }
+                // Look for MY specific assigned letter AND piece index
+                if (flake.letterIndex === this.assignedLetterIndex &&
+                    flake.pieceIndex === this.assignedPieceIndex) {
+                    // Only target SETTLED flakes that aren't eaten
+                    if (flake.settled && !flake.isEaten()) {
+                        targetFlake = flake;
+                        break; // Found our assigned piece!
                     }
                 }
             }
 
-            if (closestFlake) {
-                this.targetFlake = closestFlake;
+            if (targetFlake) {
+                this.targetFlake = targetFlake;
                 this.eating = false;
+                // Use anticipation position as feeding offset if available, otherwise create new one
+                if (this.anticipationPosition) {
+                    this.feedingOffset = {
+                        x: this.anticipationPosition.x - targetFlake.x,
+                        y: this.anticipationPosition.y - targetFlake.y
+                    };
+                } else {
+                    // Fallback: create random offset (tighter for clearer letters)
+                    let angle = random(TWO_PI);
+                    let radius = random(2, 8); // Reduced max radius for tighter clustering (was 12)
+                    this.feedingOffset = {
+                        x: cos(angle) * radius,
+                        y: sin(angle) * radius
+                    };
+                }
             } else {
-                // No food available - just swim
+                // Our assigned food piece isn't available yet - just swim
                 this.swim();
                 return;
             }
         }
 
-        // Swim directly to the food piece
-        if (this.targetFlake) {
-            let dx = this.targetFlake.x - this.x;
-            let dy = this.targetFlake.y - this.y;
+        // Swim to the food piece (with offset)
+        if (this.targetFlake && this.feedingOffset) {
+            // Target position is food location + random offset
+            let targetX = this.targetFlake.x + this.feedingOffset.x;
+            let targetY = this.targetFlake.y + this.feedingOffset.y;
+
+            let dx = targetX - this.x;
+            let dy = targetY - this.y;
             let distance = sqrt(dx * dx + dy * dy);
 
-            if (distance < 20) {
+            if (distance < 15) {
                 // Close enough - eating!
                 if (!this.eating) {
                     this.targetFlake.claimFish();
                     this.eating = true;
                 }
 
-                // Stay near the food piece
-                this.x = lerp(this.x, this.targetFlake.x, 0.1);
-                this.y = lerp(this.y, this.targetFlake.y, 0.1);
+                // Stay near the offset position around food
+                this.x = lerp(this.x, targetX, 0.08);
+                this.y = lerp(this.y, targetY, 0.08);
 
-                // Face the food
-                let targetAngle = atan2(dy, dx);
+                // Face towards the actual food piece
+                let foodDx = this.targetFlake.x - this.x;
+                let foodDy = this.targetFlake.y - this.y;
+                let targetAngle = atan2(foodDy, foodDx);
                 this.angle = lerp(this.angle, targetAngle, 0.1);
 
                 // Gentle wiggle while eating
                 this.wiggle += this.wobble * 0.5;
             } else {
-                // Swim towards food
+                // Swim towards offset position
                 let targetAngle = atan2(dy, dx);
-                this.angle = lerp(this.angle, targetAngle, 0.1);
+                this.angle = lerp(this.angle, targetAngle, 0.15); // Faster turning
 
-                // Move towards food
-                let moveSpeed = this.speed * 2;
+                // Move towards food - much faster!
+                let moveSpeed = this.speed * 4; // 4x speed when swimming to food
                 this.x += cos(this.angle) * moveSpeed;
                 this.y += sin(this.angle) * moveSpeed;
 
