@@ -23,7 +23,8 @@
       "Bash(\"../ffmpeg-8.0.1-essentials_build/bin/ffmpeg.exe\" -f concat -safe 0 -r 30 -i filelist_poa.txt -c:v libx264 -pix_fmt yuv420p -crf 18 animation_12principles.mp4 -y)",
       "Bash(where:*)",
       "Bash(echo:*)",
-      "Bash(rm:*)"
+      "Bash(rm:*)",
+      "Bash(start letter-fish-genuary/index.html)"
     ],
     "deny": [],
     "ask": []
