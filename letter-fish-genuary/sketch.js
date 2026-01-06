@@ -18,6 +18,7 @@ let animationTimer = 0;
 const LOOP_DURATION = 300; // 10 seconds at 30fps
 const SWIM_START_DURATION = 30; // 1 second of swimming at start (at 30fps)
 const FEEDING_START = 30; // Start feeding at 1 second (at 30fps)
+const SECOND_WAVE_START = 120; // Second wave starts at 4 seconds
 const FEEDING_END = 270; // End feeding at 9 seconds, return to swimming for seamless loop
 
 // Ornament animation
@@ -49,12 +50,13 @@ function setup() {
 }
 
 function draw() {
-    // Increment animation timer for seamless loop
-    // When recording, don't reset the animation - let it play once through
-    if (!isRecording || recordingFrameCount >= TOTAL_RECORDING_FRAMES) {
+    // When recording, use frameCount directly as animation timer
+    // Otherwise, manage our own animation timer for looping
+    if (!isRecording) {
+        // Normal looping mode when not recording
         animationTimer++;
 
-        // Reset for next loop only when not recording
+        // Reset for next loop
         if (animationTimer >= LOOP_DURATION) {
             animationTimer = 0;
             totalDrops = 0;
@@ -63,13 +65,16 @@ function draw() {
             animationState = 'swimming';
 
             for (let fish of fishes) {
+                if (fish.targetFlake) {
+                    fish.targetFlake.releaseFish();
+                }
                 fish.targetFlake = null;
                 fish.eating = false;
                 fish.clusterPosition = null;
             }
         }
-    } else {
-        // When recording, use recordingFrameCount as the timer
+    } else if (isRecording && recordingFrameCount < TOTAL_RECORDING_FRAMES) {
+        // During recording, animation timer matches the current frame being recorded
         animationTimer = recordingFrameCount;
     }
 
@@ -82,8 +87,11 @@ function draw() {
         animationState = 'swimming';
         // Clear remaining flakes
         foodFlakes = [];
-        // Reset fish to swimming
+        // Reset all fish to swimming state
         for (let fish of fishes) {
+            if (fish.targetFlake) {
+                fish.targetFlake.releaseFish();
+            }
             fish.targetFlake = null;
             fish.eating = false;
             fish.clusterPosition = null;
@@ -106,32 +114,19 @@ function draw() {
     // Draw plants
     drawAquariumPlants();
 
-    // Drop food flakes based on position for 10-second reel
+    // Drop food flakes at specific times for 10-second reel
     if (animationState === 'feeding') {
-        // Drop first wave immediately at start
-        if (!firstWaveDropped) {
+        // Drop first wave at start of feeding (frame 30 / 1 second)
+        if (animationTimer === FEEDING_START && !firstWaveDropped) {
             dropFoodFlakes();
             firstWaveDropped = true;
             totalDrops = 1;
         }
 
-        // Drop second wave when first wave reaches 33% from top
-        if (totalDrops === 1 && foodFlakes.length > 0) {
-            // Check if any flake from first wave has reached 33% mark
-            let firstWaveAt33 = false;
-            const TRIGGER_HEIGHT = height * 0.33;
-
-            for (let flake of foodFlakes) {
-                if (flake.y >= TRIGGER_HEIGHT) {
-                    firstWaveAt33 = true;
-                    break;
-                }
-            }
-
-            if (firstWaveAt33 && totalDrops < MAX_DROPS) {
-                dropFoodFlakes();
-                totalDrops = 2;
-            }
+        // Drop second wave at 4 seconds (frame 120) - this will be most legible
+        if (animationTimer === SECOND_WAVE_START && totalDrops === 1) {
+            dropFoodFlakes();
+            totalDrops = 2;
         }
     }
 
@@ -165,11 +160,16 @@ function draw() {
 
     // Frame recording for video export
     if (isRecording && recordingFrameCount < TOTAL_RECORDING_FRAMES) {
-        save(`frame_${nf(recordingFrameCount, 4)}.png`);
+        // Save the current frame with custom naming
+        let frameNumber = recordingFrameCount + 1; // Start from 001 instead of 000
+        save(`GenuaryFishes${nf(frameNumber, 3)}.png`);
+
+        // Increment AFTER saving so next draw() renders the next frame
         recordingFrameCount++;
 
         if (recordingFrameCount >= TOTAL_RECORDING_FRAMES) {
             console.log("Recording complete! 300 frames saved.");
+            isRecording = false; // Stop recording
             noLoop(); // Stop the animation
         }
     }
@@ -572,7 +572,8 @@ function dropFoodFlakes() {
                 flakeY,
                 word[i],
                 i, // Letter index (0-6)
-                p  // Piece index
+                p, // Piece index
+                totalDrops + 1 // Wave number (1 or 2)
             ));
         }
     }
@@ -582,7 +583,7 @@ function getLetterClusterPositions(letter) {
     // Returns 10 key positions where pieces should settle to form letter shape
     // Fish will cluster densely around these pieces
     let positions = [];
-    let scale = 18; // Reduced scale for more compact letters
+    let scale = 40; // MUCH larger scale for visible letters on 1920px tall canvas
 
     switch(letter) {
         case 'G':
@@ -709,7 +710,7 @@ class Bubble {
 }
 
 class FoodFlake {
-    constructor(startX, startY, letter, letterIndex, pieceIndex) {
+    constructor(startX, startY, letter, letterIndex, pieceIndex, waveNumber = 1) {
         this.startX = startX;
         this.startY = startY;
         this.x = startX;
@@ -719,9 +720,16 @@ class FoodFlake {
         let allPositions = getLetterClusterPositions(letter);
         let myPosition = allPositions[pieceIndex % allPositions.length];
 
-        // Target position at 66% height, spread out to form letter shape
-        this.targetX = startX + myPosition.x;
-        this.targetY = height * 0.66 + myPosition.y;
+        // Calculate letter center position - centered horizontally, 60% down vertically
+        const letterSpacing = 140; // Spacing between letter centers
+        const totalWidth = 6 * letterSpacing; // 6 gaps between 7 letters
+        const firstLetterX = (width - totalWidth) / 2;
+        let letterCenterX = firstLetterX + letterIndex * letterSpacing;
+        let letterCenterY = height * 0.60; // Letters at 60% height for better visibility
+
+        // Target position spreads out from letter center to form the shape
+        this.targetX = letterCenterX + myPosition.x;
+        this.targetY = letterCenterY + myPosition.y;
 
         this.size = random(6, 9); // Small pieces
         this.fallSpeed = random(2.5, 3.2);
@@ -730,6 +738,7 @@ class FoodFlake {
         this.fishEating = 0; // Number of fish eating this piece
         this.eatenAmount = 0; // How much has been eaten (0-1)
         this.settled = false;
+        this.waveNumber = waveNumber; // Track which wave (1 or 2)
 
         // Letter this piece represents
         this.letter = letter;
@@ -773,8 +782,9 @@ class FoodFlake {
 
         // Get eaten by fish (fish start eating once pieces reach 33%)
         if (this.fishEating > 0) {
-            // Eat much faster so both waves get consumed in 8 seconds
-            this.eatenAmount += 0.08 * this.fishEating;
+            // First wave eats much faster, second wave eats VERY slowly for better legibility
+            let eatRate = this.waveNumber === 1 ? 0.015 : 0.003;
+            this.eatenAmount += eatRate * this.fishEating;
             if (this.eatenAmount > 1) {
                 this.eatenAmount = 1;
             }
@@ -791,16 +801,8 @@ class FoodFlake {
         fill(this.hue, this.saturation, this.brightness);
         noStroke();
 
-        // Draw irregular flake shape
-        beginShape();
-        for (let i = 0; i < 6; i++) {
-            let angle = (TWO_PI / 6) * i;
-            let r = currentSize * random(0.8, 1.2);
-            let px = this.x + cos(angle) * r;
-            let py = this.y + sin(angle) * r;
-            vertex(px, py);
-        }
-        endShape(CLOSE);
+        // Draw simple circle for food piece
+        ellipse(this.x, this.y, currentSize, currentSize);
         pop();
     }
 
@@ -817,10 +819,15 @@ class FoodFlake {
     }
 
     getClusterPosition(fishIndex) {
-        // Each piece IS a position in the letter, so fish just go to the piece itself
+        // Fish cluster tightly around the piece to form visible letters
+        // Multiple fish should overlap at the same positions for dense letter formation
+        // Use fishIndex to get consistent but VERY tight clustering
+        let angle = (fishIndex * 2.4) % TWO_PI; // Golden angle-ish distribution
+        let radius = ((fishIndex * 3) % 20) + 2; // Much tighter cluster: 2-22 pixels for dense letters
+
         return {
-            x: this.x,
-            y: this.y
+            x: this.x + cos(angle) * radius,
+            y: this.y + sin(angle) * radius
         };
     }
 }
@@ -941,14 +948,13 @@ class Guppy {
     }
 
     feedOnFlakes(flakes) {
-        // If currently eating and piece is gone, disperse and look for next piece
+        // If currently eating and piece is gone, look for next piece
         if (this.eating && this.targetFlake) {
             if (this.targetFlake.isEaten()) {
                 this.targetFlake.releaseFish();
                 this.targetFlake = null;
                 this.eating = false;
                 this.clusterPosition = null;
-                // Don't immediately return - look for another piece from same letter
             }
         }
 
@@ -959,7 +965,6 @@ class Guppy {
             const DETECTION_HEIGHT = height * 0.33; // Fish notice flakes at 33% from top
 
             // Find best available piece from assigned letter
-            // Prefer pieces with fewer fish already eating them
             for (let flake of flakes) {
                 // Only target pieces from the assigned letter
                 if (flake.letterIndex === this.assignedFlakeIndex) {
@@ -967,7 +972,7 @@ class Guppy {
                     if (flake.y >= DETECTION_HEIGHT && !flake.isEaten()) {
                         let d = dist(this.x, this.y, flake.x, flake.y);
                         // Score based on distance and how many fish are already there
-                        let score = -d - flake.fishEating * 50; // Penalize crowded pieces
+                        let score = -d - flake.fishEating * 30; // Penalize crowded pieces
                         if (score > bestScore) {
                             bestScore = score;
                             assignedFlake = flake;
@@ -977,18 +982,17 @@ class Guppy {
             }
 
             if (assignedFlake) {
-                // Release previous flake
-                if (this.targetFlake) {
+                // Found a flake - target it
+                if (this.targetFlake && this.targetFlake !== assignedFlake) {
                     this.targetFlake.releaseFish();
                 }
 
                 this.targetFlake = assignedFlake;
                 this.eating = false;
-                // Get position - each piece is a position in the letter
+                // Get cluster position around this piece
                 this.clusterPosition = assignedFlake.getClusterPosition(this.fishIndex);
-            } else if (!assignedFlake && this.y < height * 0.5 + 100) {
-                // No more pieces available, disperse back to swimming
-                this.angle = random(TWO_PI);
+            } else {
+                // No more pieces available - swim in bottom half
                 this.swim();
                 return;
             }
@@ -1000,33 +1004,38 @@ class Guppy {
             let dy = this.clusterPosition.y - this.y;
             let distance = sqrt(dx * dx + dy * dy);
 
-            if (distance < 40) {
-                // Close enough to cluster position - smoothly settle into position
+            if (distance < 30) {
+                // Close enough - settle into position
                 if (!this.eating) {
                     this.targetFlake.claimFish();
                     this.eating = true;
                 }
 
-                // Smoothly approach exact cluster position for clear letters
-                this.x = lerp(this.x, this.clusterPosition.x, 0.3);
-                this.y = lerp(this.y, this.clusterPosition.y, 0.3);
+                // Very smoothly and slowly approach cluster position for clear, stable letters
+                // Use slower lerp for more stable positioning
+                this.x = lerp(this.x, this.clusterPosition.x, 0.15);
+                this.y = lerp(this.y, this.clusterPosition.y, 0.15);
 
+                // Face the food
                 let targetAngle = atan2(this.targetFlake.y - this.y, this.targetFlake.x - this.x);
                 this.angle = lerp(this.angle, targetAngle, 0.2);
+
+                // Gentle wiggle while eating
+                this.wiggle += this.wobble * 0.5;
             } else {
-                // Smoothly accelerate towards cluster position
+                // Swim towards cluster position
                 let targetAngle = atan2(dy, dx);
                 this.angle = lerp(this.angle, targetAngle, 0.15);
 
-                // Gradual speed increase for smooth transition
-                let dashSpeed = this.speed * lerp(1.5, 3.5, min(1, distance / 200));
+                // Moderate speed towards food (not too fast to avoid glitching)
+                let dashSpeed = this.speed * 2.5;
                 this.x += cos(this.angle) * dashSpeed;
                 this.y += sin(this.angle) * dashSpeed;
-            }
 
-            this.wiggle += this.wobble;
+                this.wiggle += this.wobble;
+            }
         } else {
-            // No flakes available, swim in bottom half
+            // No valid target - swim in bottom half
             this.swim();
         }
     }
