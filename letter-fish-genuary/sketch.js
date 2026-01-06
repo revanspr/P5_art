@@ -70,7 +70,6 @@ function draw() {
                 }
                 fish.targetFlake = null;
                 fish.eating = false;
-                fish.clusterPosition = null;
             }
         }
     } else if (isRecording && recordingFrameCount < TOTAL_RECORDING_FRAMES) {
@@ -94,7 +93,6 @@ function draw() {
             }
             fish.targetFlake = null;
             fish.eating = false;
-            fish.clusterPosition = null;
         }
     }
 
@@ -548,11 +546,11 @@ function updateBubbles() {
 
 function dropFoodFlakes() {
     // Drop 7 flakes (one for each letter of GENUARY)
-    // Each flake splits into 10 pieces that fall together in a cluster
+    // Each flake splits into pieces that fall together in a cluster
     const word = "GENUARY"; // Uppercase for better visibility
-    const PIECES_PER_LETTER = 10; // Fewer pieces, more fish clustering
+    const PIECES_PER_LETTER = 15; // More pieces for clearer letter formation
 
-    const letterSpacing = 145; // Spacing between letters
+    const letterSpacing = 150; // Spacing between letters (matches FoodFlake spacing)
     const totalWidth = word.length * letterSpacing;
     const startX = (width - totalWidth) / 2 + letterSpacing / 2;
     const baseY = 50; // Starting height (near top)
@@ -580,67 +578,68 @@ function dropFoodFlakes() {
 }
 
 function getLetterClusterPositions(letter) {
-    // Returns 10 key positions where pieces should settle to form letter shape
+    // Returns 15 key positions where pieces should settle to form letter shape
     // Fish will cluster densely around these pieces
     let positions = [];
-    let scale = 40; // MUCH larger scale for visible letters on 1920px tall canvas
+    let scale = 60; // Even larger scale for clearly visible letters on 1920px tall canvas
 
     switch(letter) {
         case 'G':
             positions = [
-                {x: -2*scale, y: -3*scale}, {x: -2*scale, y: 0}, {x: -2*scale, y: 3*scale},
-                {x: 0, y: -3*scale}, {x: 2*scale, y: -3*scale},
-                {x: 0, y: 3*scale}, {x: 2*scale, y: 3*scale},
-                {x: 2*scale, y: 1.5*scale}, {x: 0, y: 0}, {x: 1*scale, y: 0}
+                {x: -2*scale, y: -3*scale}, {x: -2*scale, y: -1.5*scale}, {x: -2*scale, y: 0}, {x: -2*scale, y: 1.5*scale}, {x: -2*scale, y: 3*scale},
+                {x: 0, y: -3*scale}, {x: 1*scale, y: -3*scale}, {x: 2*scale, y: -3*scale},
+                {x: 0, y: 3*scale}, {x: 1*scale, y: 3*scale}, {x: 2*scale, y: 3*scale},
+                {x: 2*scale, y: 1.5*scale}, {x: 0, y: 0}, {x: 1*scale, y: 0}, {x: 0.5*scale, y: 1.5*scale}
             ];
             break;
         case 'E':
             positions = [
-                {x: -2*scale, y: -3*scale}, {x: -2*scale, y: 0}, {x: -2*scale, y: 3*scale},
-                {x: 0, y: -3*scale}, {x: 1.5*scale, y: -3*scale},
-                {x: 0, y: 0}, {x: 1*scale, y: 0},
-                {x: 0, y: 3*scale}, {x: 1.5*scale, y: 3*scale}, {x: -2*scale, y: -1.5*scale}
+                {x: -2*scale, y: -3*scale}, {x: -2*scale, y: -1.5*scale}, {x: -2*scale, y: 0}, {x: -2*scale, y: 1.5*scale}, {x: -2*scale, y: 3*scale},
+                {x: 0, y: -3*scale}, {x: 1*scale, y: -3*scale}, {x: 1.5*scale, y: -3*scale},
+                {x: 0, y: 0}, {x: 0.5*scale, y: 0}, {x: 1*scale, y: 0},
+                {x: 0, y: 3*scale}, {x: 1*scale, y: 3*scale}, {x: 1.5*scale, y: 3*scale}, {x: -1*scale, y: -1.5*scale}
             ];
             break;
         case 'N':
             positions = [
-                {x: -2*scale, y: -3*scale}, {x: -2*scale, y: 0}, {x: -2*scale, y: 3*scale},
-                {x: 2*scale, y: -3*scale}, {x: 2*scale, y: 0}, {x: 2*scale, y: 3*scale},
-                {x: 0, y: -1*scale}, {x: 0, y: 1*scale}, {x: -1*scale, y: -2*scale}, {x: 1*scale, y: 2*scale}
+                {x: -2*scale, y: -3*scale}, {x: -2*scale, y: -1.5*scale}, {x: -2*scale, y: 0}, {x: -2*scale, y: 1.5*scale}, {x: -2*scale, y: 3*scale},
+                {x: 2*scale, y: -3*scale}, {x: 2*scale, y: -1.5*scale}, {x: 2*scale, y: 0}, {x: 2*scale, y: 1.5*scale}, {x: 2*scale, y: 3*scale},
+                {x: -1*scale, y: -2*scale}, {x: 0, y: -1*scale}, {x: 0, y: 0}, {x: 0, y: 1*scale}, {x: 1*scale, y: 2*scale}
             ];
             break;
         case 'U':
             positions = [
-                {x: -2*scale, y: -3*scale}, {x: -2*scale, y: 0},
-                {x: 2*scale, y: -3*scale}, {x: 2*scale, y: 0},
-                {x: -1.5*scale, y: 3*scale}, {x: -0.5*scale, y: 3*scale},
-                {x: 0.5*scale, y: 3*scale}, {x: 1.5*scale, y: 3*scale},
-                {x: -2*scale, y: 1.5*scale}, {x: 2*scale, y: 1.5*scale}
+                {x: -2*scale, y: -3*scale}, {x: -2*scale, y: -1.5*scale}, {x: -2*scale, y: 0}, {x: -2*scale, y: 1.5*scale},
+                {x: 2*scale, y: -3*scale}, {x: 2*scale, y: -1.5*scale}, {x: 2*scale, y: 0}, {x: 2*scale, y: 1.5*scale},
+                {x: -1.5*scale, y: 3*scale}, {x: -1*scale, y: 3*scale}, {x: -0.5*scale, y: 3*scale},
+                {x: 0.5*scale, y: 3*scale}, {x: 1*scale, y: 3*scale}, {x: 1.5*scale, y: 3*scale}, {x: 0, y: 2.5*scale}
             ];
             break;
         case 'A':
             positions = [
-                {x: 0, y: -3*scale},
+                {x: 0, y: -3*scale}, {x: -0.5*scale, y: -2.5*scale}, {x: 0.5*scale, y: -2.5*scale},
                 {x: -1*scale, y: -1.5*scale}, {x: 1*scale, y: -1.5*scale},
-                {x: -1.5*scale, y: 0}, {x: 1.5*scale, y: 0},
+                {x: -1.5*scale, y: 0}, {x: -0.5*scale, y: 0}, {x: 0, y: 0}, {x: 0.5*scale, y: 0}, {x: 1.5*scale, y: 0},
                 {x: -2*scale, y: 1.5*scale}, {x: 2*scale, y: 1.5*scale},
-                {x: -2*scale, y: 3*scale}, {x: 2*scale, y: 3*scale}, {x: 0, y: 0}
+                {x: -2*scale, y: 3*scale}, {x: -2.5*scale, y: 2.5*scale}, {x: 2*scale, y: 3*scale}
             ];
             break;
         case 'R':
             positions = [
-                {x: -2*scale, y: -3*scale}, {x: -2*scale, y: 0}, {x: -2*scale, y: 3*scale},
-                {x: 0, y: -3*scale}, {x: 1.5*scale, y: -3*scale},
-                {x: 2*scale, y: -1.5*scale}, {x: 1*scale, y: 0},
-                {x: 0, y: 1.5*scale}, {x: 1*scale, y: 3*scale}, {x: -2*scale, y: 1.5*scale}
+                {x: -2*scale, y: -3*scale}, {x: -2*scale, y: -1.5*scale}, {x: -2*scale, y: 0}, {x: -2*scale, y: 1.5*scale}, {x: -2*scale, y: 3*scale},
+                {x: 0, y: -3*scale}, {x: 1*scale, y: -3*scale}, {x: 1.5*scale, y: -3*scale},
+                {x: 2*scale, y: -2*scale}, {x: 2*scale, y: -1.5*scale},
+                {x: 1*scale, y: 0}, {x: 0.5*scale, y: 0},
+                {x: 0, y: 1.5*scale}, {x: 0.5*scale, y: 2*scale}, {x: 1*scale, y: 3*scale}
             ];
             break;
         case 'Y':
             positions = [
-                {x: -2*scale, y: -3*scale}, {x: -1*scale, y: -1.5*scale},
-                {x: 2*scale, y: -3*scale}, {x: 1*scale, y: -1.5*scale},
-                {x: 0, y: 0}, {x: 0, y: 1.5*scale}, {x: 0, y: 3*scale},
-                {x: -0.5*scale, y: 1*scale}, {x: 0.5*scale, y: 1*scale}, {x: 0, y: -0.5*scale}
+                {x: -2*scale, y: -3*scale}, {x: -1.5*scale, y: -2.5*scale}, {x: -1*scale, y: -1.5*scale},
+                {x: 2*scale, y: -3*scale}, {x: 1.5*scale, y: -2.5*scale}, {x: 1*scale, y: -1.5*scale},
+                {x: -0.5*scale, y: -0.5*scale}, {x: 0, y: 0}, {x: 0.5*scale, y: -0.5*scale},
+                {x: 0, y: 1*scale}, {x: -0.5*scale, y: 1*scale}, {x: 0.5*scale, y: 1*scale},
+                {x: 0, y: 1.5*scale}, {x: 0, y: 2.5*scale}, {x: 0, y: 3*scale}
             ];
             break;
     }
@@ -720,12 +719,12 @@ class FoodFlake {
         let allPositions = getLetterClusterPositions(letter);
         let myPosition = allPositions[pieceIndex % allPositions.length];
 
-        // Calculate letter center position - centered horizontally, 60% down vertically
-        const letterSpacing = 140; // Spacing between letter centers
+        // Calculate letter center position - centered horizontally, 50% down vertically
+        const letterSpacing = 150; // Spacing between letter centers (wider for clarity)
         const totalWidth = 6 * letterSpacing; // 6 gaps between 7 letters
         const firstLetterX = (width - totalWidth) / 2;
         let letterCenterX = firstLetterX + letterIndex * letterSpacing;
-        let letterCenterY = height * 0.60; // Letters at 60% height for better visibility
+        let letterCenterY = height * 0.50; // Letters at 50% height (middle of screen)
 
         // Target position spreads out from letter center to form the shape
         this.targetX = letterCenterX + myPosition.x;
@@ -817,19 +816,6 @@ class FoodFlake {
     releaseFish() {
         this.fishEating = max(0, this.fishEating - 1);
     }
-
-    getClusterPosition(fishIndex) {
-        // Fish cluster tightly around the piece to form visible letters
-        // Multiple fish should overlap at the same positions for dense letter formation
-        // Use fishIndex to get consistent but VERY tight clustering
-        let angle = (fishIndex * 2.4) % TWO_PI; // Golden angle-ish distribution
-        let radius = ((fishIndex * 3) % 20) + 2; // Much tighter cluster: 2-22 pixels for dense letters
-
-        return {
-            x: this.x + cos(angle) * radius,
-            y: this.y + sin(angle) * radius
-        };
-    }
 }
 
 class Guppy {
@@ -860,7 +846,6 @@ class Guppy {
         // Feeding behavior
         this.targetFlake = null;
         this.eating = false;
-        this.clusterPosition = null;
     }
 
     swim() {
@@ -948,94 +933,82 @@ class Guppy {
     }
 
     feedOnFlakes(flakes) {
-        // If currently eating and piece is gone, look for next piece
-        if (this.eating && this.targetFlake) {
-            if (this.targetFlake.isEaten()) {
-                this.targetFlake.releaseFish();
-                this.targetFlake = null;
-                this.eating = false;
-                this.clusterPosition = null;
-            }
+        // Simple behavior: find closest food from my assigned letter and swim to it
+
+        // If current target is eaten, release it
+        if (this.targetFlake && this.targetFlake.isEaten()) {
+            this.targetFlake.releaseFish();
+            this.targetFlake = null;
+            this.eating = false;
         }
 
-        // Find an available piece from assigned letter
-        if (!this.eating || !this.targetFlake) {
-            let assignedFlake = null;
-            let bestScore = -Infinity;
+        // Find a food piece to target (if we don't have one)
+        if (!this.targetFlake) {
+            let closestFlake = null;
+            let closestDist = Infinity;
             const DETECTION_HEIGHT = height * 0.33; // Fish notice flakes at 33% from top
 
-            // Find best available piece from assigned letter
             for (let flake of flakes) {
-                // Only target pieces from the assigned letter
+                // Only look at food from my assigned letter
                 if (flake.letterIndex === this.assignedFlakeIndex) {
-                    // Fish can see pieces once they reach 33% from top
+                    // Only target visible flakes that aren't eaten
                     if (flake.y >= DETECTION_HEIGHT && !flake.isEaten()) {
                         let d = dist(this.x, this.y, flake.x, flake.y);
-                        // Score based on distance and how many fish are already there
-                        let score = -d - flake.fishEating * 30; // Penalize crowded pieces
-                        if (score > bestScore) {
-                            bestScore = score;
-                            assignedFlake = flake;
+                        if (d < closestDist) {
+                            closestDist = d;
+                            closestFlake = flake;
                         }
                     }
                 }
             }
 
-            if (assignedFlake) {
-                // Found a flake - target it
-                if (this.targetFlake && this.targetFlake !== assignedFlake) {
-                    this.targetFlake.releaseFish();
-                }
-
-                this.targetFlake = assignedFlake;
+            if (closestFlake) {
+                this.targetFlake = closestFlake;
                 this.eating = false;
-                // Get cluster position around this piece
-                this.clusterPosition = assignedFlake.getClusterPosition(this.fishIndex);
             } else {
-                // No more pieces available - swim in bottom half
+                // No food available - just swim
                 this.swim();
                 return;
             }
         }
 
-        // Swim towards cluster position around target flake
-        if (this.targetFlake && !this.targetFlake.isEaten() && this.clusterPosition) {
-            let dx = this.clusterPosition.x - this.x;
-            let dy = this.clusterPosition.y - this.y;
+        // Swim directly to the food piece
+        if (this.targetFlake) {
+            let dx = this.targetFlake.x - this.x;
+            let dy = this.targetFlake.y - this.y;
             let distance = sqrt(dx * dx + dy * dy);
 
-            if (distance < 30) {
-                // Close enough - settle into position
+            if (distance < 20) {
+                // Close enough - eating!
                 if (!this.eating) {
                     this.targetFlake.claimFish();
                     this.eating = true;
                 }
 
-                // Very smoothly and slowly approach cluster position for clear, stable letters
-                // Use slower lerp for more stable positioning
-                this.x = lerp(this.x, this.clusterPosition.x, 0.15);
-                this.y = lerp(this.y, this.clusterPosition.y, 0.15);
+                // Stay near the food piece
+                this.x = lerp(this.x, this.targetFlake.x, 0.1);
+                this.y = lerp(this.y, this.targetFlake.y, 0.1);
 
                 // Face the food
-                let targetAngle = atan2(this.targetFlake.y - this.y, this.targetFlake.x - this.x);
-                this.angle = lerp(this.angle, targetAngle, 0.2);
+                let targetAngle = atan2(dy, dx);
+                this.angle = lerp(this.angle, targetAngle, 0.1);
 
                 // Gentle wiggle while eating
                 this.wiggle += this.wobble * 0.5;
             } else {
-                // Swim towards cluster position
+                // Swim towards food
                 let targetAngle = atan2(dy, dx);
-                this.angle = lerp(this.angle, targetAngle, 0.15);
+                this.angle = lerp(this.angle, targetAngle, 0.1);
 
-                // Moderate speed towards food (not too fast to avoid glitching)
-                let dashSpeed = this.speed * 2.5;
-                this.x += cos(this.angle) * dashSpeed;
-                this.y += sin(this.angle) * dashSpeed;
+                // Move towards food
+                let moveSpeed = this.speed * 2;
+                this.x += cos(this.angle) * moveSpeed;
+                this.y += sin(this.angle) * moveSpeed;
 
                 this.wiggle += this.wobble;
             }
         } else {
-            // No valid target - swim in bottom half
+            // No target - swim normally
             this.swim();
         }
     }
