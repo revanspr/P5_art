@@ -24,7 +24,8 @@
       "Bash(where:*)",
       "Bash(echo:*)",
       "Bash(rm:*)",
-      "Bash(start letter-fish-genuary/index.html)"
+      "Bash(start letter-fish-genuary/index.html)",
+      "Bash(start LightsOnLightsOff/index.html)"
     ],
     "deny": [],
     "ask": []

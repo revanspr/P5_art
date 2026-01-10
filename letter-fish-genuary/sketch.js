@@ -67,35 +67,41 @@ function draw() {
 
         // Reset for next loop
         if (animationTimer >= LOOP_DURATION) {
-            animationTimer = 0;
-            totalDrops = 0;
-            foodDropped = false;
-            foodFlakes = [];
-            animationState = 'swimming';
-
-            // Increment loop counter
+            // Increment loop counter first
             loopCount++;
 
-            // Start recording on the 3rd loop
-            if (loopCount === START_RECORDING_LOOP && !isRecording) {
+            // Start recording on the 3rd loop BEFORE resetting
+            if (loopCount === START_RECORDING_LOOP) {
                 isRecording = true;
                 recordingFrameCount = 0;
                 console.log("Starting recording on loop 3...");
-            }
+                // Don't reset the animation state, let it continue into recording
+                // The recording will capture frame 0 (which is the start of loop 3)
+            } else {
+                // Normal reset for non-recording loops
+                animationTimer = 0;
+                totalDrops = 0;
+                foodDropped = false;
+                foodFlakes = [];
+                animationState = 'swimming';
 
-            for (let fish of fishes) {
-                if (fish.targetFlake) {
-                    fish.targetFlake.releaseFish();
+                for (let fish of fishes) {
+                    if (fish.targetFlake) {
+                        fish.targetFlake.releaseFish();
+                    }
+                    fish.targetFlake = null;
+                    fish.eating = false;
+                    fish.feedingOffset = null;
+                    fish.anticipating = false;
+                    fish.anticipationPosition = null;
+                    fish.returning = false;
                 }
-                fish.targetFlake = null;
-                fish.eating = false;
-                fish.feedingOffset = null;
-                fish.anticipating = false;
-                fish.anticipationPosition = null;
-                fish.returning = false;
             }
         }
-    } else if (isRecording && recordingFrameCount < TOTAL_RECORDING_FRAMES) {
+    }
+
+    // Update animation timer when recording
+    if (isRecording && recordingFrameCount < TOTAL_RECORDING_FRAMES) {
         // During recording, animation timer matches the current frame being recorded
         animationTimer = recordingFrameCount;
     }
